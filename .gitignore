@@ -46,7 +46,7 @@ app.*.map.json
 
 # Large build artifacts
 mix-app-debug/
-mix_app/
+/mix_app/
 
 # Reference projects (too large, not part of source)
 用于参考的过往项目/
