@@ -42,14 +42,14 @@ class PromptBuilder {
 
 ## 学生当前状态
 
-${dimensionDescriptions}
+$dimensionDescriptions
 
 ## 综合掌握度
 
 综合掌握度：${(composite * 100).toStringAsFixed(0)}分（满分100）
 
 ## 历史错因
-${errorHint}
+$errorHint
 
 ## 格式铁律（严格遵循）
 
