@@ -320,7 +320,7 @@ class _StatusBarState extends State<StatusBar>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return FadeTransition(
-      opacity: 1.0 - _fadeController.value,
+      opacity: _fadeController.drive(Tween(begin: 1.0, end: 0.0)),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(

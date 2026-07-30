@@ -239,7 +239,7 @@ class MarkdownContent extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: SelectableText(block.content, style: TextStyle(fontSize: fontSize, fontFamily: 'monospace', color: codeColor, height: 1.4)),
-          );
+          ),
         );
       case _BlockType.quote:
         return Padding(
