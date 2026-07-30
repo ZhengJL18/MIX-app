@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+/// Markdown 块级类型
+enum _BlockType { text, h1, h2, h3, code, math, quote, bullet, ordered, hr }
+
+/// Markdown 块
+class _Block {
+  final _BlockType type;
+  final String content;
+  final int indent;
+  _Block(this.type, this.content, [this.indent = 0]);
+}
+
 /// MIX Markdown 渲染管线 — 手写解析，不依赖 flutter_markdown。
 ///
 /// 支持：
@@ -46,17 +57,8 @@ class MarkdownContent extends StatelessWidget {
 
   // ── 块级解析 ──
 
-  enum BlockType { text, h1, h2, h3, code, math, quote, bullet, ordered, hr }
-
-  class Block {
-    final BlockType type;
-    final String content;
-    final int indent;
-    Block(this.type, this.content, [this.indent = 0]);
-  }
-
-  List<Block> _parseBlocks(String md) {
-    final blocks = <Block>[];
+  List<_Block> _parseBlocks(String md) {
+    final blocks = <_Block>[];
     final lines = md.split('\n');
     String? codeAccum;
 
@@ -64,7 +66,7 @@ class MarkdownContent extends StatelessWidget {
       // 代码块
       if (raw.trimLeft().startsWith('```')) {
         if (codeAccum != null) {
-          blocks.add(Block(BlockType.code, codeAccum.trim()));
+          blocks.add(_Block(_BlockType.code, codeAccum.trim()));
           codeAccum = null;
         } else {
           codeAccum = '';
@@ -80,30 +82,30 @@ class MarkdownContent extends StatelessWidget {
 
       // 分割线
       if (RegExp(r'^-{3,}$').hasMatch(line)) {
-        blocks.add(Block(BlockType.hr, ''));
+        blocks.add(_Block(_BlockType.hr, ''));
         continue;
       }
 
       // 标题
-      if (line.startsWith('### ')) { blocks.add(Block(BlockType.h3, line.substring(4))); continue; }
-      if (line.startsWith('## ')) { blocks.add(Block(BlockType.h2, line.substring(3))); continue; }
-      if (line.startsWith('# ')) { blocks.add(Block(BlockType.h1, line.substring(2))); continue; }
+      if (line.startsWith('### ')) { blocks.add(_Block(_BlockType.h3, line.substring(4))); continue; }
+      if (line.startsWith('## ')) { blocks.add(_Block(_BlockType.h2, line.substring(3))); continue; }
+      if (line.startsWith('# ')) { blocks.add(_Block(_BlockType.h1, line.substring(2))); continue; }
 
       // 引用
-      if (line.startsWith('> ')) { blocks.add(Block(BlockType.quote, line.substring(2))); continue; }
+      if (line.startsWith('> ')) { blocks.add(_Block(_BlockType.quote, line.substring(2))); continue; }
 
       // 列表
-      if (RegExp(r'^-\s').hasMatch(line)) { blocks.add(Block(BlockType.bullet, line.substring(2).trimLeft())); continue; }
-      if (RegExp(r'^\d+[.)]\s').hasMatch(line)) { blocks.add(Block(BlockType.ordered, line.replaceFirst(RegExp(r'^\d+[.)]\s'), ''))); continue; }
+      if (RegExp(r'^-\s').hasMatch(line)) { blocks.add(_Block(_BlockType.bullet, line.substring(2).trimLeft())); continue; }
+      if (RegExp(r'^\d+[.)]\s').hasMatch(line)) { blocks.add(_Block(_BlockType.ordered, line.replaceFirst(RegExp(r'^\d+[.)]\s'), ''))); continue; }
 
       // 空行
       if (line.isEmpty) continue;
 
-      blocks.add(Block(BlockType.text, line));
+      blocks.add(_Block(_BlockType.text, line));
     }
 
     if (codeAccum != null) {
-      blocks.add(Block(BlockType.code, codeAccum.trim()));
+      blocks.add(_Block(_BlockType.code, codeAccum.trim()));
     }
 
     return blocks;
@@ -190,26 +192,26 @@ class MarkdownContent extends StatelessWidget {
 
   // ── 块级渲染 ──
 
-  Widget _buildBlock(Block block, Color textColor, Color codeColor, double fontSize, Color bg, bool isDark) {
+  Widget _buildBlock(_Block block, Color textColor, Color codeColor, double fontSize, Color bg, bool isDark) {
     final padding = EdgeInsets.only(bottom: _blockSpacing(block.type));
 
     switch (block.type) {
-      case BlockType.h1:
+      case _BlockType.h1:
         return Padding(
           padding: const EdgeInsets.only(top: 20, bottom: 8),
           child: SelectableText(block.content, style: TextStyle(fontSize: fontSize + 6, fontWeight: FontWeight.bold, color: textColor)),
         );
-      case BlockType.h2:
+      case _BlockType.h2:
         return Padding(
           padding: const EdgeInsets.only(top: 16, bottom: 6),
           child: SelectableText(block.content, style: TextStyle(fontSize: fontSize + 3, fontWeight: FontWeight.bold, color: textColor)),
         );
-      case BlockType.h3:
+      case _BlockType.h3:
         return Padding(
           padding: const EdgeInsets.only(top: 12, bottom: 4),
           child: SelectableText(block.content, style: TextStyle(fontSize: fontSize + 1, fontWeight: FontWeight.w600, color: textColor)),
         );
-      case BlockType.code:
+      case _BlockType.code:
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Container(
@@ -226,7 +228,7 @@ class MarkdownContent extends StatelessWidget {
             )),
           ),
         );
-      case BlockType.math:
+      case _BlockType.math:
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Container(
@@ -239,7 +241,7 @@ class MarkdownContent extends StatelessWidget {
             child: SelectableText(block.content, style: TextStyle(fontSize: fontSize, fontFamily: 'monospace', color: codeColor, height: 1.4)),
           );
         );
-      case BlockType.quote:
+      case _BlockType.quote:
         return Padding(
           padding: const EdgeInsets.only(bottom: 8, left: 12),
           child: Container(
@@ -250,7 +252,7 @@ class MarkdownContent extends StatelessWidget {
             child: _buildInline(block.content, textColor.withValues(alpha: 0.85), codeColor, fontSize),
           ),
         );
-      case BlockType.bullet:
+      case _BlockType.bullet:
         return Padding(
           padding: EdgeInsets.only(bottom: 4, left: 8 + block.indent * 16),
           child: Row(
@@ -261,7 +263,7 @@ class MarkdownContent extends StatelessWidget {
             ],
           ),
         );
-      case BlockType.ordered:
+      case _BlockType.ordered:
         return Padding(
           padding: const EdgeInsets.only(bottom: 4),
           child: Row(
@@ -272,12 +274,12 @@ class MarkdownContent extends StatelessWidget {
             ],
           ),
         );
-      case BlockType.hr:
+      case _BlockType.hr:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Divider(color: isDark ? Colors.white12 : const Color(0xFFD8D0C0)),
         );
-      case BlockType.text:
+      case _BlockType.text:
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: _buildInline(block.content, textColor, codeColor, fontSize),
@@ -294,12 +296,12 @@ class MarkdownContent extends StatelessWidget {
     );
   }
 
-  double _blockSpacing(BlockType t) {
+  double _blockSpacing(_BlockType t) {
     switch (t) {
-      case BlockType.h1: return 12;
-      case BlockType.h2: return 10;
-      case BlockType.h3: return 8;
-      case BlockType.hr: return 4;
+      case _BlockType.h1: return 12;
+      case _BlockType.h2: return 10;
+      case _BlockType.h3: return 8;
+      case _BlockType.hr: return 4;
       default: return 0;
     }
   }
