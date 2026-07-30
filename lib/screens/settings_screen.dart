@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 RadioGroup<ThemeMode>(
                   groupValue: _themeMode,
-                  onChanged: (v) => setState(() => _themeMode = v),
+                  onChanged: (v) => setState(() { if (v != null) _themeMode = v; }),
                   child: Column(
                     children: [
                       RadioListTile<ThemeMode>(
