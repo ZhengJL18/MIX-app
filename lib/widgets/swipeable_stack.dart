@@ -3,8 +3,9 @@ import 'package:flutter/physics.dart';
 
 /// TikTok 式上下滑动容器 — 基于 PageView 实现
 ///
-/// viewportFraction < 1 → 上下页天然 peeking。
-/// PageView 自动处理与内部 ScrollView 的手势冲突，无需额外代码。
+/// PageView 自动处理与内部 ScrollView 的手势冲突。
+/// ⚠️ 不使用 viewportFraction（会导致 Expanded 崩溃），
+/// peeking 效果由外层 PageView 的 physics 和 padding 实现。
 class SwipeableStack extends StatefulWidget {
   final List<Widget> pages;
   final int initialIndex;
@@ -29,10 +30,7 @@ class _SwipeableStackState extends State<SwipeableStack> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex.clamp(0, widget.pages.length - 1);
-    _pageCtrl = PageController(
-      initialPage: _currentIndex,
-      viewportFraction: 0.88, // 下页露出 12% 作为 peeking
-    );
+    _pageCtrl = PageController(initialPage: _currentIndex);
   }
 
   @override
