@@ -386,6 +386,8 @@ class _StepSubjectsState extends State<_StepSubjects> {
     }
   }
 
+  bool get _hasIdentity => widget.identity != null;
+
   @override
   void dispose() {
     _customCtrl.dispose();
@@ -452,20 +454,30 @@ class _StepSubjectsState extends State<_StepSubjects> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 预设科目
-                      ..._presets.map((s) => Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: AiProgressSlider(
-                          subjectName: s.name,
-                          stops: s.progressStops,
-                          initialStop: widget.subjectProgress.containsKey(s.name)
-                              ? widget.subjectProgress[s.name]!
-                              : -1,
-                          onStopChanged: (stop) {
-                            widget.onProgressChanged(s.name, stop);
-                          },
+                      // 预设科目（需要先选身份）
+                      if (_hasIdentity) ...[
+                        ..._presets.map((s) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: AiProgressSlider(
+                            subjectName: s.name,
+                            stops: s.progressStops,
+                            initialStop: widget.subjectProgress.containsKey(s.name)
+                                ? widget.subjectProgress[s.name]!
+                                : -1,
+                            onStopChanged: (stop) {
+                              widget.onProgressChanged(s.name, stop);
+                            },
+                          ),
+                        )),
+                      ] else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: Text('请先在「选择身份」页设置你的身份',
+                              style: TextStyle(color: AppColors.lightTextMuted),
+                            ),
+                          ),
                         ),
-                      )),
 
                       // 分隔 + AI 推荐区
                       if (widget.aiSubjects.isNotEmpty) ...[
