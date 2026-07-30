@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import '../db/database_helper.dart';
-import '../services/ai_service.dart';
 
 /// 设置页 — 主题切换 + AI 接口配置 + Hermes 连接配置
 class SettingsScreen extends StatefulWidget {
@@ -97,23 +95,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             color: isDark ? const Color(0xFF16213E) : Colors.white,
             child: Column(
               children: [
-                RadioListTile<ThemeMode>(
-                  title: const Text('深色模式'),
-                  value: ThemeMode.dark,
+                RadioGroup<ThemeMode>(
                   groupValue: _themeMode,
-                  onChanged: (v) => setState(() => _themeMode = v!),
-                ),
-                RadioListTile<ThemeMode>(
-                  title: const Text('浅色模式'),
-                  value: ThemeMode.light,
-                  groupValue: _themeMode,
-                  onChanged: (v) => setState(() => _themeMode = v!),
-                ),
-                RadioListTile<ThemeMode>(
-                  title: const Text('跟随系统'),
-                  value: ThemeMode.system,
-                  groupValue: _themeMode,
-                  onChanged: (v) => setState(() => _themeMode = v!),
+                  onChanged: (v) => setState(() => _themeMode = v),
+                  child: Column(
+                    children: [
+                      RadioListTile<ThemeMode>(
+                        title: const Text('深色模式'),
+                        value: ThemeMode.dark,
+                      ),
+                      RadioListTile<ThemeMode>(
+                        title: const Text('浅色模式'),
+                        value: ThemeMode.light,
+                      ),
+                      RadioListTile<ThemeMode>(
+                        title: const Text('跟随系统'),
+                        value: ThemeMode.system,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
