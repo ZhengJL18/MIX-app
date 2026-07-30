@@ -25,6 +25,9 @@ enum _AnswerState { unanswered, correct, wrong }
 
 class _PracticeScreenState extends State<PracticeScreen> {
   _AnswerState _currentAnswer = _AnswerState.unanswered;
+  String? _mainCause;
+  String? _minorCause;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -47,11 +50,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
     setState(() => _currentAnswer = _AnswerState.wrong);
   }
 
-  bool _submitting = false;
-
-  /// 用户滑过了第3页 → 提交+下一题
+  /// 用户滑过了提示/答题结束 → 提交+下一题
   Future<void> _onAdvance() async {
-    if (_submitting) return; // 防止重复提交
+    if (_submitting) return;
     _submitting = true;
     final appState = context.read<AppState>();
     final q = _q;
@@ -60,33 +61,29 @@ class _PracticeScreenState extends State<PracticeScreen> {
       return;
     }
 
-    switch (_currentAnswer) {
-      case _AnswerState.correct:
-        await appState.submitAnswer(correct: true, mainCause: null, minorCause: null);
-      case _AnswerState.wrong:
-        // 点❌但没填反馈直接滑走 → 全部 -0.1
-        await appState.submitAnswer(correct: false, mainCause: null, minorCause: null);
-      case _AnswerState.unanswered:
-        // 直接滑没点任何按钮 → 全部 -0.1
-        await appState.submitAnswer(correct: false, mainCause: null, minorCause: null);
+    String? mainDim;
+    String? minorDim;
+    if (_currentAnswer == _AnswerState.wrong) {
+      if (_mainCause != null) mainDim = mapCauseLabelToDim(_mainCause!);
+      if (_minorCause != null) minorDim = mapCauseLabelToDim(_minorCause!);
     }
+
+    await appState.submitAnswer(
+      correct: _currentAnswer == _AnswerState.correct,
+      mainCause: mainDim,
+      minorCause: minorDim,
+    );
+
     _currentAnswer = _AnswerState.unanswered;
+    _mainCause = null;
+    _minorCause = null;
     appState.loadNextQuestion();
     _submitting = false;
   }
 
-  /// 反馈页提交回调（填了主因/辅因）
-  Future<void> _onFeedbackSubmit(String mainLabel, String? minorLabel) async {
-    if (_submitting) return;
-    _submitting = true;
-    final appState = context.read<AppState>();
-    final mainDim = mapCauseLabelToDim(mainLabel);
-    final minorDim = minorLabel != null ? mapCauseLabelToDim(minorLabel) : null;
-    await appState.submitAnswer(correct: false, mainCause: mainDim, minorCause: minorDim);
-    _currentAnswer = _AnswerState.unanswered;
-    appState.loadNextQuestion();
-    _submitting = false;
-  }
+  /// 反馈页主因/辅因变更回调
+  void _onMainCauseChanged(String? cause) => setState(() => _mainCause = cause);
+  void _onMinorCauseChanged(String? cause) => setState(() => _minorCause = cause);
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +123,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
           // Page 2 — 反馈页（答错才显示内容）
           Builder(builder: (_) {
             if (_currentAnswer == _AnswerState.wrong) {
-              return FeedbackCard(question: q, onSubmit: _onFeedbackSubmit);
+              return FeedbackCard(
+                mainCause: _mainCause,
+                minorCause: _minorCause,
+                onMainCauseChanged: _onMainCauseChanged,
+                onMinorCauseChanged: _onMinorCauseChanged,
+              );
             }
             // 答对/跳过 → 空白占位，直接滑过去
             return const _AutoAdvancePage();

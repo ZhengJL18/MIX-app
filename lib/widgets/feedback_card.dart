@@ -3,23 +3,22 @@ import '../theme/app_colors.dart';
 import '../engine/feedback_v2.dart';
 
 /// 错因反馈卡片 — 主因（必选）+ 辅因（可选）
-class FeedbackCard extends StatefulWidget {
-  final Map<String, dynamic> question;
-  final void Function(String mainCause, String? minorCause) onSubmit;
+///
+/// ⚠️ 状态由父组件管理（_PracticeScreenState），
+/// 卡片本身只渲染 UI 并回调，不维护内部状态。
+class FeedbackCard extends StatelessWidget {
+  final String? mainCause;
+  final String? minorCause;
+  final ValueChanged<String?> onMainCauseChanged;
+  final ValueChanged<String?> onMinorCauseChanged;
 
   const FeedbackCard({
     super.key,
-    required this.question,
-    required this.onSubmit,
+    this.mainCause,
+    this.minorCause,
+    required this.onMainCauseChanged,
+    required this.onMinorCauseChanged,
   });
-
-  @override
-  State<FeedbackCard> createState() => _FeedbackCardState();
-}
-
-class _FeedbackCardState extends State<FeedbackCard> {
-  String? _mainCause;
-  String? _minorCause;
 
   @override
   Widget build(BuildContext context) {
@@ -46,9 +45,9 @@ class _FeedbackCardState extends State<FeedbackCard> {
           ...labels.map((e) => _CauseButton(
             label: e.key,
             hint: e.value,
-            selected: _mainCause == e.key,
+            selected: mainCause == e.key,
             color: AppColors.wrong,
-            onTap: () => setState(() => _mainCause = e.key),
+            onTap: () => onMainCauseChanged(mainCause == e.key ? null : e.key),
           )),
           const SizedBox(height: 20),
           // 辅因（可选）
@@ -57,21 +56,17 @@ class _FeedbackCardState extends State<FeedbackCard> {
           ...labels.map((e) => _CauseButton(
             label: e.key,
             hint: e.value,
-            selected: _minorCause == e.key,
+            selected: minorCause == e.key,
             color: AppColors.secondary,
-            onTap: () {
-              setState(() {
-                _minorCause = _minorCause == e.key ? null : e.key;
-              });
-            },
+            onTap: () => onMinorCauseChanged(minorCause == e.key ? null : e.key),
           )),
           const Spacer(),
           // 提交提示
           Center(
             child: Text(
-              _mainCause == null ? '请先选择主因' : '下滑提交反馈 ➡',
+              mainCause == null ? '请先选择主因' : '下滑提交反馈 ➡',
               style: TextStyle(
-                color: _mainCause == null ? AppColors.lightTextMuted.withValues(alpha: 0.5) : AppColors.lightTextMuted,
+                color: mainCause == null ? AppColors.lightTextMuted.withValues(alpha: 0.5) : AppColors.lightTextMuted,
                 fontSize: 14,
               ),
             ),
