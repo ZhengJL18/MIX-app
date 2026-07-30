@@ -1,0 +1,839 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_colors.dart';
+import '../data/preset_data.dart';
+import 'swipeable_stack.dart';
+import 'ai_progress_slider.dart';
+
+/// 冷启动 4 步引导的组装器
+class OnboardingFlow extends StatefulWidget {
+  const OnboardingFlow({super.key});
+
+  @override
+  State<OnboardingFlow> createState() => _OnboardingFlowState();
+}
+
+class _OnboardingFlowState extends State<OnboardingFlow> {
+  /// 冷启动数据收集
+  String? _selectedVendorId;
+  String? _selectedModel;
+  String? _apiKey;
+  SubIdentity? _selectedIdentity;
+  final Map<String, int> _subjectProgress = {}; // 科目名 → 档位索引
+  final List<String> _customSubjects = [];
+
+  // AI 推荐缓存的科目和档位
+  List<Map<String, dynamic>> _aiRecommendedSubjects = [];
+  bool _aiLoading = false;
+
+  // 各步的模型列表（选厂商后填充）
+  List<String> _availableModels = [];
+
+  @override
+  Widget build(BuildContext context) {
+    // 4 步页面
+    final pages = <Widget>[
+      _StepAiConfig(
+        selectedVendorId: _selectedVendorId,
+        selectedModel: _selectedModel,
+        apiKey: _apiKey,
+        availableModels: _availableModels,
+        onVendorChanged: (id, models) {
+          setState(() {
+            _selectedVendorId = id;
+            _availableModels = models;
+            _selectedModel = models.isNotEmpty ? models.first : null;
+          });
+        },
+        onModelChanged: (m) => setState(() => _selectedModel = m),
+        onKeyChanged: (k) => setState(() => _apiKey = k),
+      ),
+      _StepIdentity(
+        selectedIdentity: _selectedIdentity,
+        onIdentityChanged: (id) {
+          setState(() {
+            _selectedIdentity = id;
+            _aiLoading = true;
+          });
+          _loadAiRecommendations(id);
+        },
+      ),
+      _StepSubjects(
+        identity: _selectedIdentity,
+        subjectProgress: _subjectProgress,
+        customSubjects: _customSubjects,
+        aiSubjects: _aiRecommendedSubjects,
+        aiLoading: _aiLoading,
+        onProgressChanged: (subject, stop) {
+          setState(() => _subjectProgress[subject] = stop);
+        },
+        onAddCustom: (name) {
+          setState(() => _customSubjects.add(name));
+        },
+      ),
+      _StepComplete(
+        subjectCount: _subjectProgress.length + _customSubjects.length,
+        vendorName: _selectedVendorId,
+        onFinish: _onFinish,
+      ),
+    ];
+
+    return Scaffold(
+      body: SafeArea(
+        child: SwipeableStack(
+          pages: pages,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadAiRecommendations(SubIdentity identity) async {
+    // 模拟 AI 推荐（后续接入真实 API）
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    setState(() {
+      _aiRecommendedSubjects = [];
+      _aiLoading = false;
+    });
+  }
+
+  Future<void> _onFinish() async {
+    // 保存配置到 SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ai_vendor', _selectedVendorId ?? '');
+    await prefs.setString('ai_model', _selectedModel ?? '');
+    await prefs.setString('api_key', _apiKey ?? '');
+    await prefs.setString('identity', _selectedIdentity?.name ?? '');
+    await prefs.setBool('onboarding_complete', true);
+
+    if (!mounted) return;
+    // 通知主页面刷新（跳转到主界面）
+    Navigator.of(context).pushReplacementNamed('/home');
+  }
+}
+
+// ─── 各步骤卡片 ──────────────────────────────────
+
+// ─── Step 1: AI 配置 ───
+
+class _StepAiConfig extends StatelessWidget {
+  final String? selectedVendorId;
+  final String? selectedModel;
+  final String? apiKey;
+  final List<String> availableModels;
+  final ValueChanged<String> onVendorChanged;
+  final ValueChanged<String> onModelChanged;
+  final ValueChanged<String> onKeyChanged;
+
+  const _StepAiConfig({
+    required this.selectedVendorId,
+    required this.selectedModel,
+    required this.apiKey,
+    required this.availableModels,
+    required this.onVendorChanged,
+    required this.onModelChanged,
+    required this.onKeyChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Container(
+      color: AppColors.lightBg,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Text('🎯', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(child: Text('选择 AI 模型', style: t.headlineMedium)),
+              Text('1/4', style: t.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 40),
+            child: Text('需要 AI 才能给你出题哦', style: t.labelLarge),
+          ),
+          // 进度点
+          const SizedBox(height: 12),
+          _ProgressDots(count: 4, current: 0),
+          const SizedBox(height: 24),
+          Expanded(
+            child: ListView(
+              children: [
+                // 厂商列表
+                ...kAiVendors.map((v) => _VendorCard(
+                  vendor: v,
+                  selected: selectedVendorId == v.id,
+                  onTap: () => onVendorChanged(v.id, v.models),
+                )),
+                // 自定义厂商
+                _CustomVendorCard(
+                  selected: selectedVendorId == 'custom',
+                  onSelect: (id, models) => onVendorChanged(id, models),
+                ),
+                const SizedBox(height: 20),
+                // 模型选择
+                if (selectedVendorId != null && availableModels.isNotEmpty) ...[
+                  Text('选择模型', style: t.titleMedium),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: availableModels.map((m) => ChoiceChip(
+                      label: Text(m),
+                      selected: selectedModel == m,
+                      onSelected: (_) => onModelChanged(m),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                      labelStyle: TextStyle(
+                        color: selectedModel == m ? AppColors.primary : null,
+                        fontWeight: selectedModel == m ? FontWeight.w600 : null,
+                      ),
+                    )).toList(),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                // API Key 输入
+                Text('API Key', style: t.titleMedium),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: '粘贴 API Key',
+                    hintStyle: TextStyle(color: AppColors.lightTextMuted.withValues(alpha: 0.5)),
+                    filled: true,
+                    fillColor: AppColors.lightSurface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.lightDivider),
+                    ),
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  obscureText: true,
+                  onChanged: onKeyChanged,
+                ),
+                if (apiKey != null && apiKey!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.check_circle, color: AppColors.correct, size: 16),
+                      const SizedBox(width: 6),
+                      Text('Key 已配置（仅存本地）', style: TextStyle(color: AppColors.correct, fontSize: 13)),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          _SwipeHint(),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Step 2: 身份选择 ───
+
+class _StepIdentity extends StatelessWidget {
+  final SubIdentity? selectedIdentity;
+  final ValueChanged<SubIdentity> onIdentityChanged;
+
+  const _StepIdentity({
+    required this.selectedIdentity,
+    required this.onIdentityChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Container(
+      color: AppColors.lightBg,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Text('👤', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(child: Text('选择你的身份', style: t.headlineMedium)),
+              Text('2/4', style: t.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 40),
+            child: Text('选择最适合你的标签', style: t.labelLarge),
+          ),
+          const SizedBox(height: 12),
+          _ProgressDots(count: 4, current: 1),
+          const SizedBox(height: 24),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  // 按身份类别分组
+                  for (final cat in IdentityCategory.values) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(cat.label, style: t.titleMedium?.copyWith(
+                          color: AppColors.lightTextMuted, fontSize: 14,
+                        )),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: SubIdentity.values
+                          .where((s) => s.category == cat)
+                          .map((s) => _IdentityChip(
+                        label: s.label,
+                        selected: selectedIdentity == s,
+                        onTap: () => onIdentityChanged(s),
+                      )).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          _SwipeHint(),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Step 3: 科目+进度 ───
+
+class _StepSubjects extends StatefulWidget {
+  final SubIdentity? identity;
+  final Map<String, int> subjectProgress;
+  final List<String> customSubjects;
+  final List<Map<String, dynamic>> aiSubjects;
+  final bool aiLoading;
+  final void Function(String subject, int stopIndex) onProgressChanged;
+  final ValueChanged<String> onAddCustom;
+
+  const _StepSubjects({
+    required this.identity,
+    required this.subjectProgress,
+    required this.customSubjects,
+    required this.aiSubjects,
+    required this.aiLoading,
+    required this.onProgressChanged,
+    required this.onAddCustom,
+  });
+
+  @override
+  State<_StepSubjects> createState() => _StepSubjectsState();
+}
+
+class _StepSubjectsState extends State<_StepSubjects> {
+  final _customCtrl = TextEditingController();
+  List<SubjectPreset> _presets = [];
+
+  @override
+  void didUpdateWidget(_StepSubjects old) {
+    super.didUpdateWidget(old);
+    if (widget.identity != old.identity) {
+      _presets = widget.identity != null
+          ? presetSubjectsFor(widget.identity!)
+          : [];
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.identity != null) {
+      _presets = presetSubjectsFor(widget.identity!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _customCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+
+    return Container(
+      color: AppColors.lightBg,
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                const Text('📚', style: TextStyle(fontSize: 28)),
+                const SizedBox(width: 12),
+                Expanded(child: Text('设置你的科目', style: t.headlineMedium)),
+                Text('3/4', style: t.labelLarge),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 40),
+                  child: Text('选择科目并拖动进度条标注学习进度', style: t.labelLarge),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _ProgressDots(count: 4, current: 2),
+          ),
+          const SizedBox(height: 8),
+          // ───────── 卡片内滚动区域（卡中卡核心） ─────────
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.lightSurface,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 预设科目
+                      ..._presets.map((s) => Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: AiProgressSlider(
+                          subjectName: s.name,
+                          stops: s.progressStops,
+                          initialStop: widget.subjectProgress.containsKey(s.name)
+                              ? widget.subjectProgress[s.name]!
+                              : -1,
+                          onStopChanged: (stop) {
+                            widget.onProgressChanged(s.name, stop);
+                          },
+                        ),
+                      )),
+
+                      // 分隔 + AI 推荐区
+                      if (widget.aiSubjects.isNotEmpty) ...[
+                        const Divider(height: 24),
+                        Text('🤖 AI 推荐', style: t.titleMedium),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: widget.aiSubjects.map((s) => ActionChip(
+                            label: Text(s['name'] as String),
+                            avatar: const Icon(Icons.add, size: 16),
+                            onPressed: () {
+                              widget.onProgressChanged(s['name'] as String, 0);
+                            },
+                          )).toList(),
+                        ),
+                      ],
+
+                      if (widget.aiLoading) ...[
+                        const Divider(height: 24),
+                        Text('🤖 AI 正在推荐...', style: t.labelLarge),
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(color: AppColors.primary),
+                      ],
+
+                      // 自定义添加
+                      const Divider(height: 24),
+                      Text('✏️ 自定义', style: t.titleMedium),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: TextField(
+                                controller: _customCtrl,
+                                decoration: InputDecoration(
+                                  hintText: '输入科目名',
+                                  hintStyle: TextStyle(color: AppColors.lightTextMuted.withValues(alpha: 0.5)),
+                                  filled: true,
+                                  fillColor: AppColors.lightSurfaceAlt,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              final name = _customCtrl.text.trim();
+                              if (name.isNotEmpty) {
+                                widget.onAddCustom(name);
+                                widget.onProgressChanged(name, 0);
+                                _customCtrl.clear();
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              minimumSize: const Size(0, 44),
+                            ),
+                            child: const Text('添加'),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 下滑提示
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: _SwipeHint(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Step 4: 完成页 ───
+
+class _StepComplete extends StatelessWidget {
+  final int subjectCount;
+  final String? vendorName;
+  final VoidCallback onFinish;
+
+  const _StepComplete({
+    required this.subjectCount,
+    required this.vendorName,
+    required this.onFinish,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final vendorLabel = kAiVendors.where((v) => v.id == vendorName).firstOrNull?.name ?? vendorName ?? 'AI';
+
+    return Container(
+      color: AppColors.lightBg,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Spacer(),
+          const Text('🎉', style: TextStyle(fontSize: 64)),
+          const SizedBox(height: 20),
+          Text('全部设置完成！', style: t.headlineLarge),
+          const SizedBox(height: 24),
+          _StatLine(icon: '📚', text: '$subjectCount 个科目'),
+          const SizedBox(height: 8),
+          _StatLine(icon: '🎯', text: '个性化进度已初始化'),
+          const SizedBox(height: 8),
+          _StatLine(icon: '🤖', text: '$vendorLabel AI 已就绪'),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              '你的信息仅保存在本地设备上，Hermes 随时为你服务',
+              textAlign: TextAlign.center,
+              style: t.labelLarge,
+            ),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: onFinish,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('🚀 开始刷题！', style: TextStyle(fontSize: 18, color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── 小组件 ──────────────────────────────────
+
+class _ProgressDots extends StatelessWidget {
+  final int count;
+  final int current;
+  const _ProgressDots({required this.count, required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(count, (i) {
+        final active = i == current;
+        final done = i < current;
+        return Expanded(
+          child: Container(
+            height: 4,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: done
+                  ? AppColors.primary
+                  : active
+                      ? AppColors.primary.withValues(alpha: 0.6)
+                      : AppColors.lightDivider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _SwipeHint extends StatelessWidget {
+  const _SwipeHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '下滑下一步 ➡',
+            style: TextStyle(
+              color: AppColors.lightTextMuted.withValues(alpha: 0.6),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorCard extends StatelessWidget {
+  final AiVendorPreset vendor;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _VendorCard({
+    required this.vendor,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primaryLight : AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.lightDivider,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              if (vendor.recommended) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('推荐', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(vendor.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(vendor.keyHint, style: TextStyle(fontSize: 12, color: AppColors.lightTextMuted)),
+                  ],
+                ),
+              ),
+              if (selected) Icon(Icons.check_circle, color: AppColors.primary, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomVendorCard extends StatefulWidget {
+  final bool selected;
+  final void Function(String id, List<String> models) onSelect;
+
+  const _CustomVendorCard({required this.selected, required this.onSelect});
+
+  @override
+  State<_CustomVendorCard> createState() => _CustomVendorCardState();
+}
+
+class _CustomVendorCardState extends State<_CustomVendorCard> {
+  final _urlCtrl = TextEditingController();
+  final _modelCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    _modelCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () {
+          if (_urlCtrl.text.isNotEmpty && _modelCtrl.text.isNotEmpty) {
+            widget.onSelect('custom', [_modelCtrl.text]);
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: widget.selected ? AppColors.primaryLight : AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: widget.selected ? AppColors.primary : AppColors.lightDivider,
+              width: widget.selected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.edit, size: 18),
+                  SizedBox(width: 8),
+                  Text('✏️ 自定义', style: TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _urlCtrl,
+                decoration: const InputDecoration(
+                  hintText: 'Base URL（如 https://api.example.com/v1）',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _modelCtrl,
+                decoration: const InputDecoration(
+                  hintText: 'Model Name（如 my-model）',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IdentityChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _IdentityChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.lightSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.lightDivider,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppColors.lightText,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatLine extends StatelessWidget {
+  final String icon;
+  final String text;
+  const _StatLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 20)),
+        const SizedBox(width: 10),
+        Text(text, style: const TextStyle(fontSize: 16)),
+      ],
+    );
+  }
+}
