@@ -60,19 +60,19 @@ class _MixAppState extends State<MixApp> {
         title: 'Mix',
         themeMode: _themeMode,
         theme: ThemeData.light().copyWith(
-          scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+          scaffoldBackgroundColor: const Color(0xFFF5ECD7),
           colorScheme: const ColorScheme.light(
             primary: Color(0xFFFF8C42),
             secondary: Color(0xFFFF8C42),
-            surface: Colors.white,
+            surface: Color(0xFFFEF9EF),
           ),
           appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black87,
+            backgroundColor: Color(0xFFF5ECD7),
+            foregroundColor: Color(0xFF3A3A3A),
             elevation: 0.5,
           ),
           cardTheme: CardThemeData(
-            color: Colors.white,
+            color: const Color(0xFFFEF9EF),
             elevation: 1,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),

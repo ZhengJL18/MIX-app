@@ -275,24 +275,45 @@ class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
   final bool retrying;
 
+  bool get _noSubject => message.contains('没有科目') || message.contains('科目管理') || message.contains('创建');
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white70 : const Color(0xFF5A5A5A);
+    final iconColor = isDark ? Colors.white24 : const Color(0xFFB0A090);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.info_outline, size: 48, color: Colors.white38),
+            Icon(Icons.info_outline, size: 48, color: iconColor),
             const SizedBox(height: 12),
             Text(message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70)),
+                style: TextStyle(color: textColor)),
             const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: retrying ? null : onRetry,
-              child: Text(retrying ? '加载中...' : '重试'),
-            ),
+            if (_noSubject)
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('去科目管理创建'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF8C42),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SubjectManagementScreen()),
+                  );
+                },
+              )
+            else
+              OutlinedButton(
+                onPressed: retrying ? null : onRetry,
+                child: Text(retrying ? '加载中...' : '重试'),
+              ),
           ],
         ),
       ),
