@@ -29,9 +29,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _agentReady = false;
   StreamSubscription? _subscription;
 
-  // 流式气泡索引（用于标识需要更新的流式消息）
-  int _streamingBlockIndex = -1;
-
   @override
   void initState() {
     super.initState();
@@ -204,12 +201,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildBlock(MessageBlock block, bool isDark) {
     if (block is TextBlock) {
-      // 流式文本气泡需要 GlobalKey 以支持刷新
-      if (block.isStreaming) {
-        final key = _streamingKeys.putIfAbsent(
-          block.id, () => GlobalKey<_StreamingTextBubbleState>());
-        return StreamingTextBubble(key: key, block: block);
-      }
       return StreamingTextBubble(block: block);
     }
     if (block is ToolCallBlock) {
@@ -219,9 +210,9 @@ class _ChatScreenState extends State<ChatScreen> {
       return StatusBar(block: block);
     }
     if (block is DividerBlock) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Divider(color: Color(0xFFFF8C42)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: const Divider(color: Color(0xFFFF8C42)),
       );
     }
     return const SizedBox.shrink();

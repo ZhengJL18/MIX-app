@@ -153,7 +153,7 @@ class StatusBlock extends MessageBlock {
   final bool isWarning;
   final bool autoDismiss;   // 是否几秒后消失
 
-  const StatusBlock({
+  StatusBlock({
     required super.id,
     required this.text,
     this.isWarning = false,
@@ -178,7 +178,7 @@ class StatusBlock extends MessageBlock {
 
 /// ── 分隔线 ──
 class DividerBlock extends MessageBlock {
-  const DividerBlock({super.id = 'divider'})
+  DividerBlock({super.id = 'divider'})
     : super(type: BlockType.divider);
 
   @override
