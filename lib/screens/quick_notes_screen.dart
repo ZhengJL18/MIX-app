@@ -30,7 +30,8 @@ class _QuickNotesScreenState extends State<QuickNotesScreen> {
 
   Future<void> _load() async {
     final dir = await _notesDir();
-    final files = dir.list().whereType<File>().toList()
+    final all = await dir.list().toList();
+    final files = all.whereType<File>().toList()
       ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
     if (mounted) setState(() { _notes = files; _loaded = true; });
   }

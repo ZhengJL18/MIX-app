@@ -42,7 +42,8 @@ class _FilesScreenState extends State<FilesScreen> {
     final appDir = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(appDir.path, 'MIX', '_quick_notes'));
     if (!await dir.exists()) return [];
-    final files = dir.list().whereType<File>().toList()
+    final all = await dir.list().toList();
+    final files = all.whereType<File>().toList()
       ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
     return files;
   }

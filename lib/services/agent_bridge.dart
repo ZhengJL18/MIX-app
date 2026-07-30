@@ -124,6 +124,11 @@ class AgentBridge {
       'stream': true,
     });
 
+    // 当前正在累积的文本块（在 try 外声明以便 catch 能访问）
+    TextBlock? currentText;
+    ToolCallBlock? currentTool;
+    String pendingBuffer = '';
+
     try {
       final client = HttpClient();
       final request = await client.postUrl(Uri.parse('http://127.0.0.1:$_port/v1/chat/completions'));
@@ -133,10 +138,6 @@ class AgentBridge {
       final response = await request.close();
       final stream = response.transform(utf8.decoder);
 
-      // 当前正在累积的文本块
-      TextBlock? currentText;
-      ToolCallBlock? currentTool;
-      String pendingBuffer = '';
 
       await for (final chunk in stream) {
         // 解析 SSE 行
@@ -186,7 +187,7 @@ class AgentBridge {
                   if (event['error'] == true) {
                     currentTool.markError(result ?? '执行失败');
                   } else {
-                    currentTool.markSuccess(result?.length > 150 ? '${result!.substring(0, 150)}...' : result);
+                    currentTool.markSuccess((result?.length ?? 0) > 150 ? '${result!.substring(0, 150)}...' : result);
                   }
                   yield currentTool;
                   currentTool = null;

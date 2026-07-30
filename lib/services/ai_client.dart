@@ -82,13 +82,13 @@ class _AnthropicClient extends AiClient {
     final data = jsonDecode(utf8.decode(resp.bodyBytes));
     final contents = data['content'] as List<dynamic>? ?? [];
     String text = '';
-    final tools = <ToolUse>[];
+    final toolUses = <ToolUse>[];
     for (final block in contents) {
       final t = block['type'] as String?;
       if (t == 'text') text += block['text'] as String? ?? '';
-      if (t == 'tool_use') tools.add(ToolUse(id: block['id'], name: block['name'], input: block['input'] as Map<String, dynamic>? ?? {}));
+      if (t == 'tool_use') toolUses.add(ToolUse(id: block['id'], name: block['name'], input: block['input'] as Map<String, dynamic>? ?? {}));
     }
-    return AiResponse(text: text, toolUses: tools);
+    return AiResponse(text: text, toolUses: toolUses);
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../db/database_helper.dart';
 import '../models/message_block.dart';
 import '../providers/app_state.dart';
@@ -28,8 +29,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _agentReady = false;
   StreamSubscription? _subscription;
 
-  // 流式气泡的刷新句柄
-  final Map<String, GlobalKey<_StreamingTextBubbleState>> _streamingKeys = {};
+  // 流式气泡索引（用于标识需要更新的流式消息）
+  int _streamingBlockIndex = -1;
 
   @override
   void initState() {
@@ -128,19 +129,18 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
 
       setState(() {
-        // 检查是否需要更新已有的流式文本块
+        // 更新已有的流式文本块或添加新块
         if (block is TextBlock && block.isStreaming) {
           final existingIdx = _blocks.indexWhere((b) =>
-            b.id == block.id && b is TextBlock && b.isStreaming);
+            b.id == block.id);
           if (existingIdx != -1) {
-            // 更新已有块
-            (block as TextBlock).content = (block as TextBlock).content;
-            // 通知对应 widget 刷新
-            _streamingKeys[block.id]?.currentState?.refresh();
-            return;
+            _blocks[existingIdx] = block;
+          } else {
+            _blocks.add(block);
           }
+        } else {
+          _blocks.add(block);
         }
-        _blocks.add(block);
       });
       _scrollDown();
 
