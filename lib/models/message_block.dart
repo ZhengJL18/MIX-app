@@ -34,7 +34,7 @@ abstract class MessageBlock {
       case BlockType.status:
         return StatusBlock.fromMap(map);
       case BlockType.divider:
-        return const DividerBlock();
+        return DividerBlock();
     }
   }
 }

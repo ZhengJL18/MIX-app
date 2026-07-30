@@ -222,7 +222,7 @@ class AgentBridge {
         yield currentText;
       }
 
-      yield const DividerBlock();
+      yield DividerBlock();
 
     } catch (e) {
       if (currentText != null) {
@@ -344,7 +344,7 @@ class MockAgentBridge extends AgentBridge {
     yield text;
 
     yield StatusBlock(id: generateBlockId(), text: '回答完成', autoDismiss: true);
-    yield const DividerBlock();
+    yield DividerBlock();
   }
 
   String _mockReply(String msg) {

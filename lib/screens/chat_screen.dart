@@ -210,10 +210,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return StatusBar(block: block);
     }
     if (block is DividerBlock) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: const Divider(color: Color(0xFFFF8C42)),
-      );
+      return Divider(color: const Color(0xFFFF8C42));
+
     }
     return const SizedBox.shrink();
   }
