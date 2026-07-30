@@ -39,15 +39,15 @@ void main() {
     });
 
     test('短板惩罚生效（最弱维度 < 0.5 时 raw 被压制）', () {
-      // 加权平均 = 0.4*0.5 + 0.3*0.5 + 0.1*0.5 + 0.2*0.5 = 0.5
-      // 最弱 = 0.3 < 0.5 → 惩罚: 0.5 * (0.5 + 0.3) = 0.4
+      // 加权平均 = 0.4*0.5 + 0.3*0.5 + 0.1*0.5 + 0.2*0.3 = 0.46
+      // 最弱 = 0.3 < 0.5 → 惩罚: 0.46 * (0.5 + 0.3) = 0.368
       final state = <String, dynamic>{
         'complexity': 0.5, 'understand': 0.5,
         'redundancy': 0.5, 'coverage': 0.3,
       };
       final result = compositeMastery(state, defaultSubject);
-      expect(result, closeTo(0.4, 0.01));
-      expect(result, lessThan(0.5)); // 确认被压制
+      expect(result, closeTo(0.368, 0.001));
+      expect(result, lessThan(0.46)); // 确认被压制
     });
 
     test('弱点但不算短板时无惩罚', () {
