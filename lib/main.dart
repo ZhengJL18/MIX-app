@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'providers/app_state.dart';
 import 'screens/practice_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/subject_management_screen.dart';
+import 'screens/stats_screen.dart';
 
 void main() {
   runApp(const MixApp());
@@ -24,8 +26,6 @@ class _MixAppState extends State<MixApp> {
   void initState() {
     super.initState();
     _appState = AppState();
-    // 延迟初始化：等下一帧 widget 树挂好后再操作数据库，
-    // 避免 initState 期间数据库未就绪导致静默失败
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _appState.init();
       _loadTheme();
@@ -135,10 +135,64 @@ class _MixHomeState extends State<MixHome> {
     super.dispose();
   }
 
+  void _openMenu() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF16213E) : const Color(0xFFFEF9EF),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _menuItem(ctx, Icons.settings, '设置', () {
+              Navigator.of(ctx).pop();
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => SettingsScreen(onThemeChanged: widget.onThemeChanged),
+              ));
+            }),
+            _menuItem(ctx, Icons.menu_book, '科目管理', () {
+              Navigator.of(ctx).pop();
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const SubjectManagementScreen(),
+              ));
+            }),
+            _menuItem(ctx, Icons.insights, '学习统计', () {
+              Navigator.of(ctx).pop();
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const StatsScreen(),
+              ));
+            }),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _menuItem(BuildContext ctx, IconData icon, String label, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFFFF8C42)),
+      title: Text(label),
+      onTap: onTap,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5F5F5);
+    final bgColor = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5ECD7);
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
@@ -164,7 +218,7 @@ class _MixHomeState extends State<MixHome> {
   Widget _buildTabBar(bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: isDark ? const Color(0xFF16213E) : Colors.white,
+      color: isDark ? const Color(0xFF16213E) : const Color(0xFFFEF9EF),
       child: Row(
         children: [
           Row(
@@ -173,7 +227,7 @@ class _MixHomeState extends State<MixHome> {
               const SizedBox(width: 8),
               Text('Mix',
                   style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: isDark ? Colors.white : const Color(0xFF3A3A3A),
                       fontSize: 20,
                       fontWeight: FontWeight.bold)),
             ],
@@ -184,20 +238,14 @@ class _MixHomeState extends State<MixHome> {
           _tabButton('文件', 2, isDark),
           const SizedBox(width: 4),
           GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => SettingsScreen(onThemeChanged: widget.onThemeChanged),
-                ),
-              );
-            },
+            onTap: _openMenu,
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(Icons.settings, color: isDark ? Colors.white38 : Colors.black45, size: 20),
+              child: Icon(Icons.person_outline, color: isDark ? Colors.white54 : const Color(0xFF8A7A6A), size: 22),
             ),
           ),
         ],
@@ -223,7 +271,7 @@ class _MixHomeState extends State<MixHome> {
             style: TextStyle(
                 color: isActive
                     ? const Color(0xFFFF8C42)
-                    : (isDark ? Colors.white54 : Colors.black45),
+                    : (isDark ? Colors.white54 : const Color(0xFF8A7A6A)),
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal)),
       ),
     );
