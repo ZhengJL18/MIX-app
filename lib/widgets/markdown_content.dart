@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:markdown/markdown.dart' as md;
 
 /// Markdown + LaTeX 渲染组件。
 ///
@@ -53,11 +52,6 @@ class MarkdownContent extends StatelessWidget {
           border: Border(top: BorderSide(color: Colors.white12)),
         ),
       ),
-      // 自定义内联代码高亮（公式用 \$...\$ 包裹后走 code 样式）
-      inlineSyntaxes: [
-        // 让 \(\和\) 和 $$...$$ 也被识别为内联代码块
-        md.InlineCodeSyntax(),
-      ],
     );
   }
 }

@@ -48,7 +48,7 @@ dependencies:
   intl: ^0.19.0
 
   # Markdown + LaTeX 渲染（渲染 AI 返回的格式化题目/答案）
-  flutter_markdown: ^0.7.0
+  flutter_markdown: ^0.6.0
 
   # 本地 user_id（单机版无登录体系时使用）
   uuid: ^4.4.0
