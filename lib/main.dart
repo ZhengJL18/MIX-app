@@ -6,6 +6,9 @@ import 'screens/practice_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/subject_management_screen.dart';
 import 'screens/stats_screen.dart';
+import 'screens/files_screen.dart';
+import 'screens/quick_notes_screen.dart';
+import 'screens/chat_screen.dart';
 
 void main() {
   runApp(const MixApp());
@@ -57,7 +60,7 @@ class _MixAppState extends State<MixApp> {
       value: _appState,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Mix',
+        title: 'MIX',
         themeMode: _themeMode,
         theme: ThemeData.light().copyWith(
           scaffoldBackgroundColor: const Color(0xFFF5ECD7),
@@ -174,6 +177,12 @@ class _MixHomeState extends State<MixHome> {
                 builder: (_) => const StatsScreen(),
               ));
             }),
+            _menuItem(ctx, Icons.folder_open, '文件管理', () {
+              Navigator.of(ctx).pop();
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const FilesScreen(),
+              ));
+            }),
             const SizedBox(height: 24),
           ],
         ),
@@ -205,7 +214,7 @@ class _MixHomeState extends State<MixHome> {
                 children: const [
                   ChatScreen(),
                   PracticeScreen(),
-                  FilesScreen(),
+                  QuickNotesScreen(),
                 ],
               ),
             ),
@@ -225,7 +234,7 @@ class _MixHomeState extends State<MixHome> {
             children: [
               const Icon(Icons.auto_awesome, color: Color(0xFFFF8C42), size: 22),
               const SizedBox(width: 8),
-              Text('Mix',
+              Text('MIX',
                   style: TextStyle(
                       color: isDark ? Colors.white : const Color(0xFF3A3A3A),
                       fontSize: 20,
@@ -235,7 +244,7 @@ class _MixHomeState extends State<MixHome> {
           const Spacer(),
           _tabButton('AI', 0, isDark),
           _tabButton('刷题', 1, isDark),
-          _tabButton('文件', 2, isDark),
+          _tabButton('笔记', 2, isDark),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: _openMenu,
@@ -278,58 +287,3 @@ class _MixHomeState extends State<MixHome> {
   }
 }
 
-class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted = isDark ? Colors.white38 : const Color(0xFFB0A090);
-    final dim = isDark ? Colors.white24 : const Color(0xFFC0B8A8);
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline, color: muted, size: 64),
-            const SizedBox(height: 16),
-            Text('AI 对话',
-                style: TextStyle(color: muted, fontSize: 18)),
-            const SizedBox(height: 8),
-            Text('在设置中配置 API Key 后开始对话',
-                style: TextStyle(color: dim, fontSize: 14)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class FilesScreen extends StatelessWidget {
-  const FilesScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted = isDark ? Colors.white38 : const Color(0xFFB0A090);
-    final dim = isDark ? Colors.white24 : const Color(0xFFC0B8A8);
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.folder_outlined, color: muted, size: 64),
-            const SizedBox(height: 16),
-            Text('文件管理',
-                style: TextStyle(color: muted, fontSize: 18)),
-            const SizedBox(height: 8),
-            Text('管理学习资料和笔记',
-                style: TextStyle(color: dim, fontSize: 14)),
-          ],
-        ),
-      ),
-    );
-  }
-}

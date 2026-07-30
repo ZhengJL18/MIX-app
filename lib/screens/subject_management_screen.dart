@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../repository/kp_repository.dart';
 import '../repository/subject_repository.dart';
+import '../services/vault_service.dart';
 
 class SubjectManagementScreen extends StatefulWidget {
   const SubjectManagementScreen({super.key});
@@ -48,6 +49,7 @@ class _SubjectManagementScreenState extends State<SubjectManagementScreen> {
     );
     if (name == null || name.isEmpty) return;
     await _subjectRepo.insertSubject(name: name);
+    await VaultService.instance.ensureSubject(name);
     await _reload();
   }
 

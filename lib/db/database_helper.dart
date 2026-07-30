@@ -21,7 +21,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'mix.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         // WAL 模式可大幅提升并发读性能，但部分华为 EMUI 系统的 SQLite
         // 实现中 PRAGMA 可能因为文件系统路径问题失败（OS error -2）。
@@ -135,18 +135,96 @@ class DatabaseHelper {
     ''');
 
     await batch.commit(noResult: true);
+
+    // v3: 记忆系统 + 对话历史
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL DEFAULT 'fact',
+        content TEXT NOT NULL,
+        weight REAL NOT NULL DEFAULT 1.0,
+        tags TEXT,
+        source TEXT DEFAULT 'chat',
+        created_at TEXT DEFAULT (datetime('now')),
+        last_accessed_at TEXT
+      )
+    ''');
+    batch.execute('CREATE INDEX idx_memories_type ON memories(type)');
+    batch.execute('CREATE INDEX idx_memories_weight ON memories(weight)');
+
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL DEFAULT '新对话',
+        summary TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    ''');
+
+    // v3: 对话消息（JSON 序列化，更灵活）
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tool_calls TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    ''');
+    batch.execute('CREATE INDEX idx_messages_convo ON messages(conversation_id)');
+
+    await batch.commit(noResult: true);
   }
 
-  /// 数据库迁移回调。当前版本为 2（v1: 初始 5 表 + app_config）。
+  /// 数据库迁移回调。当前版本为 3（v1: 5 表, v2: app_config, v3: 记忆+对话）。
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // v2: 新增 app_config 表用于持久化 key-value 配置（questionIndex 等）
       await db.execute('''
         CREATE TABLE IF NOT EXISTS app_config (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         )
       ''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS memories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT NOT NULL DEFAULT 'fact',
+          content TEXT NOT NULL,
+          weight REAL NOT NULL DEFAULT 1.0,
+          tags TEXT,
+          source TEXT DEFAULT 'chat',
+          created_at TEXT DEFAULT (datetime('now')),
+          last_accessed_at TEXT
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_memories_weight ON memories(weight)');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS conversations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL DEFAULT '新对话',
+          summary TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          tool_calls TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_messages_convo ON messages(conversation_id)');
     }
   }
 
