@@ -200,7 +200,7 @@ class _SwipeableStack3 extends StatefulWidget {
   final List<Widget> pages;
   final VoidCallback onAdvance;
 
-  const _SwipeableStack3({required this.pages, required this.onAdvance});
+  const _SwipeableStack3({super.key, required this.pages, required this.onAdvance});
 
   @override
   State<_SwipeableStack3> createState() => _SwipeableStack3State();
@@ -336,7 +336,7 @@ class _SwipeableStack3State extends State<_SwipeableStack3>
 class _ErrorView extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
+  const _ErrorView({super.key, required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 /// TikTok 式上下滑动容器 — 基于 PageView 实现
 ///
@@ -70,12 +71,12 @@ class _TikTokPhysics extends PageScrollPhysics {
 
   @override
   _TikTokPhysics applyTo(ScrollPhysics? ancestor) {
-    return _TikTokPhysics(parent: buildPageScrollPhysics(ancestor));
+    return _TikTokPhysics(parent: ancestor);
   }
 
   @override
   double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
-    return offset * 0.92; // 轻微阻尼
+    return offset * 0.92;
   }
 
   @override

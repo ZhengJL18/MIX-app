@@ -121,9 +121,9 @@ class _StepAiConfig extends StatelessWidget {
   final String? selectedModel;
   final String? apiKey;
   final List<String> availableModels;
-  final ValueChanged<String> onVendorChanged;
-  final ValueChanged<String> onModelChanged;
-  final ValueChanged<String> onKeyChanged;
+  final void Function(String id, List<String> models) onVendorChanged;
+  final ValueChanged<String>? onModelChanged;
+  final ValueChanged<String>? onKeyChanged;
 
   const _StepAiConfig({
     required this.selectedVendorId,
@@ -187,7 +187,7 @@ class _StepAiConfig extends StatelessWidget {
                     children: availableModels.map((m) => ChoiceChip(
                       label: Text(m),
                       selected: selectedModel == m,
-                      onSelected: (_) => onModelChanged(m),
+                      onSelected: (_) => onModelChanged?.call(m),
                       selectedColor: AppColors.primary.withValues(alpha: 0.15),
                       labelStyle: TextStyle(
                         color: selectedModel == m ? AppColors.primary : null,
@@ -213,7 +213,7 @@ class _StepAiConfig extends StatelessWidget {
                     contentPadding: const EdgeInsets.all(16),
                   ),
                   obscureText: true,
-                  onChanged: onKeyChanged,
+                  onChanged: (v) => onKeyChanged?.call(v),
                 ),
                 if (apiKey != null && apiKey!.isNotEmpty) ...[
                   const SizedBox(height: 8),

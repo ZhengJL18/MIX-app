@@ -161,7 +161,6 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                           ),
                           // 档位标记点 + 标签
                           ...List.generate(stopCount, (i) {
-                            final left = i * segmentWidth - (i == 0 ? 0 : (i == stopCount - 1 ? 0 : 0));
                             final isAtOrBefore = _sliderValue * (stopCount - 1) >= i;
                             return Positioned(
                               left: i * segmentWidth - 3,

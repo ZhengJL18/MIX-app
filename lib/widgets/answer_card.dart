@@ -76,7 +76,7 @@ class AnswerCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 _CoefChip('冗余', red, AppColors.accent),
                 const SizedBox(width: 6),
-                _CoefChip('覆盖', cov, AppColors.textMuted),
+                _CoefChip('覆盖', cov, AppColors.lightTextMuted),
               ],
             ),
           ],
