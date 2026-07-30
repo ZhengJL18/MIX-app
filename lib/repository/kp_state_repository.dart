@@ -3,6 +3,28 @@ import '../engine/mastery.dart';
 
 class KpStateRepository {
   /// 若该用户-知识点尚无状态行，用科目的 mastery_initial 初始化四维，然后插入。
+  /// 直接创建新状态行（仅冷启动时使用）
+  Future<void> createState({
+    required int userId,
+    required int kpId,
+    double initialMastery = 0.3,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.insert('kp_user_state', {
+      'user_id': userId,
+      'kp_id': kpId,
+      'complexity': initialMastery,
+      'understand': initialMastery,
+      'redundancy': initialMastery,
+      'coverage': initialMastery,
+      'streak_correct': 0,
+      'streak_wrong': 0,
+      'review_count': 0,
+      'last_review_at': null,
+      'review_interval': 1.0,
+    });
+  }
+
   Future<Map<String, dynamic>> getOrCreateState({
     required int userId,
     required int kpId,

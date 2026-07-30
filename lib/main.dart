@@ -26,9 +26,6 @@ class MixApp extends StatelessWidget {
         darkTheme: AppTheme.dark,
         themeMode: ThemeMode.light,
         home: const AppEntry(),
-        routes: {
-          '/home': (_) => const _MainShell(),
-        },
       ),
     );
   }
@@ -69,7 +66,9 @@ class _AppEntryState extends State<AppEntry> {
     if (_onboardingComplete == true) {
       return const _MainShell();
     }
-    return const OnboardingFlow();
+    return OnboardingFlow(onComplete: () {
+      setState(() => _onboardingComplete = true);
+    });
   }
 }
 

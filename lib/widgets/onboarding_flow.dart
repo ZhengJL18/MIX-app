@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../repository/subject_repository.dart';
+import '../repository/kp_repository.dart';
+import '../repository/kp_state_repository.dart';
 import '../theme/app_colors.dart';
 import '../data/preset_data.dart';
 import 'swipeable_stack.dart';
@@ -7,7 +10,9 @@ import 'ai_progress_slider.dart';
 
 /// 冷启动 4 步引导的组装器
 class OnboardingFlow extends StatefulWidget {
-  const OnboardingFlow({super.key});
+  final VoidCallback onComplete;
+
+  const OnboardingFlow({super.key, required this.onComplete});
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();
@@ -106,9 +111,32 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await prefs.setString('identity', _selectedIdentity?.name ?? '');
     await prefs.setBool('onboarding_complete', true);
 
+    // 创建科目和知识点
+    if (_selectedIdentity != null) {
+      final presets = presetSubjectsFor(_selectedIdentity!);
+      final subjectRepo = SubjectRepository();
+      final kpRepo = KpRepository();
+      final kpStateRepo = KpStateRepository();
+
+      for (final preset in presets) {
+        // 只创建用户勾选了的科目（subjectProgress 中包含的）
+        final progressStop = _subjectProgress[preset.name];
+        if (progressStop == null) continue;
+
+        final subjectId = await subjectRepo.insertSubject(name: preset.name);
+        final stops = preset.progressStops;
+
+        for (var i = 0; i < stops.length; i++) {
+          final kpId = await kpRepo.insertKp(subjectId: subjectId, name: stops[i]);
+          // 已学到的进度之前的知识点初始化为 0.5，之后的 0.3
+          final initialMastery = (i <= progressStop && progressStop > 0) ? 0.5 : 0.3;
+          await kpStateRepo.createState(userId: 1, kpId: kpId, initialMastery: initialMastery);
+        }
+      }
+    }
+
     if (!mounted) return;
-    // 通知主页面刷新（跳转到主界面）
-    Navigator.of(context).pushReplacementNamed('/home');
+    widget.onComplete();
   }
 }
 
