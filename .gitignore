@@ -49,9 +49,10 @@ mix-app-debug/
 /mix_app/
 backup-*.apk
 
-# Reference projects (too large, not part of source)
+# Reference projects — not part of MIX source, CI should not analyze
 用于参考的过往项目/
 Claude版本/
+claude最新修正版/
 
 # Other working copies with embedded git
 claude最新修正版/
