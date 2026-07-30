@@ -283,19 +283,22 @@ class ChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? Colors.white38 : const Color(0xFFB0A090);
+    final dim = isDark ? Colors.white24 : const Color(0xFFC0B8A8);
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: const Center(
+      child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline, color: Colors.white24, size: 64),
-            SizedBox(height: 16),
+            Icon(Icons.chat_bubble_outline, color: muted, size: 64),
+            const SizedBox(height: 16),
             Text('AI 对话',
-                style: TextStyle(color: Colors.white38, fontSize: 18)),
-            SizedBox(height: 8),
+                style: TextStyle(color: muted, fontSize: 18)),
+            const SizedBox(height: 8),
             Text('在设置中配置 API Key 后开始对话',
-                style: TextStyle(color: Colors.white24, fontSize: 14)),
+                style: TextStyle(color: dim, fontSize: 14)),
           ],
         ),
       ),
@@ -308,19 +311,22 @@ class FilesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? Colors.white38 : const Color(0xFFB0A090);
+    final dim = isDark ? Colors.white24 : const Color(0xFFC0B8A8);
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: const Center(
+      child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.folder_outlined, color: Colors.white24, size: 64),
-            SizedBox(height: 16),
+            Icon(Icons.folder_outlined, color: muted, size: 64),
+            const SizedBox(height: 16),
             Text('文件管理',
-                style: TextStyle(color: Colors.white38, fontSize: 18)),
-            SizedBox(height: 8),
+                style: TextStyle(color: muted, fontSize: 18)),
+            const SizedBox(height: 8),
             Text('管理学习资料和笔记',
-                style: TextStyle(color: Colors.white24, fontSize: 14)),
+                style: TextStyle(color: dim, fontSize: 14)),
           ],
         ),
       ),

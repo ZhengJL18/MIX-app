@@ -81,10 +81,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final isDark = _themeMode == ThemeMode.dark;
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5F5F5),
+      backgroundColor: isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5ECD7),
       appBar: AppBar(
         title: const Text('设置'),
-        backgroundColor: isDark ? const Color(0xFF16213E) : Colors.white,
+        backgroundColor: isDark ? const Color(0xFF16213E) : const Color(0xFFF5ECD7),
+        foregroundColor: isDark ? Colors.white : const Color(0xFF3A3A3A),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -92,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── 主题 ──
           _sectionHeader('显示', isDark),
           Card(
-            color: isDark ? const Color(0xFF16213E) : Colors.white,
+            color: isDark ? const Color(0xFF16213E) : const Color(0xFFFEF9EF),
             child: Column(
               children: [
                 RadioGroup<ThemeMode>(
@@ -124,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── AI 接口配置 ──
           _sectionHeader('AI 接口（出题用）', isDark),
           Card(
-            color: isDark ? const Color(0xFF16213E) : Colors.white,
+            color: isDark ? const Color(0xFF16213E) : const Color(0xFFFEF9EF),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(

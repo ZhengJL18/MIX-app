@@ -32,6 +32,23 @@ class _PracticeScreenState extends State<PracticeScreen> {
     });
   }
 
+  Color _textMain(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? Colors.white : const Color(0xFF3A3A3A);
+  Color _textMuted(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? Colors.white54 : const Color(0xFF8A7A6A);
+  Color _textDim(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? Colors.white24 : const Color(0xFFC0B8A8);
+  Color _surface(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? const Color(0xFF16213E) : const Color(0xFFFEF9EF);
+  Color _bg(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? const Color(0xFF1A1A2E) : const Color(0xFFF5ECD7);
+  Color _cardBg(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? const Color(0xFF0F3460) : const Color(0xFFF0E8D8);
+  Color _divider(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? Colors.white12 : const Color(0xFFD8D0C0);
+  Color _iconMuted(BuildContext c) =>
+    Theme.of(c).brightness == Brightness.dark ? Colors.white38 : const Color(0xFFB0A090);
+
   /// 用户自评：答对 or 答错
   Future<void> _selfRate(BuildContext context, bool correct) async {
     final appState = context.read<AppState>();
@@ -44,7 +61,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         barrierDismissible: false,
         builder: (_) => const ErrorCauseDialog(),
       );
-      if (result == null) return; // 取消
+      if (result == null) return;
       mainCause = result.mainCause;
       minorCause = result.minorCause;
     }
@@ -62,8 +79,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
         final question = appState.currentQuestion;
 
         if (appState.loadingNext && question == null) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF8C42)));
+          return Center(
+              child: CircularProgressIndicator(color: const Color(0xFFFF8C42)));
         }
         if (appState.lastError != null) {
           return _ErrorView(
@@ -78,18 +95,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
           );
         }
         if (question == null) {
-          return const Center(
+          return Center(
               child: Text('暂无题目',
-                  style: TextStyle(color: Colors.white70, fontSize: 16)));
+                  style: TextStyle(color: _textMuted(context), fontSize: 16)));
         }
 
         return Container(
-          color: const Color(0xFF1A1A2E),
+          color: _bg(context),
           child: Column(
             children: [
-              // 顶部信息栏
               _buildHeader(appState),
-              // 题干 + 答案
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
@@ -98,12 +113,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
                     children: [
                       MarkdownContent(
                         content: question['content'] as String? ?? '',
-                        textColor: Colors.white,
+                        textColor: _textMain(context),
                         fontSize: 17,
                       ),
                       if (_showAnswer) ...[
                         const SizedBox(height: 24),
-                        const Divider(color: Colors.white12),
+                        Divider(color: _divider(context)),
                         const SizedBox(height: 12),
                         const Text('参考答案',
                             style: TextStyle(
@@ -115,16 +130,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F3460),
+                            color: _cardBg(context),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: MarkdownContent(
                             content: question['answer'] as String? ?? '',
-                            textColor: Colors.white70,
+                            textColor: _textMain(context),
                             fontSize: 16,
                           ),
                         ),
-                        // 解析（题目系数展示）
                         if (question['cplx_coef'] != null) ...[
                           const SizedBox(height: 12),
                           Text(
@@ -132,8 +146,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
                             '理解${_fmt(question['und_coef'])} · '
                             '冗余${_fmt(question['red_coef'])} · '
                             '覆盖率${_fmt(question['cov_coef'])}',
-                            style: const TextStyle(
-                                color: Colors.white24, fontSize: 12),
+                            style: TextStyle(
+                                color: _textDim(context), fontSize: 12),
                           ),
                         ],
                       ],
@@ -141,7 +155,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                 ),
               ),
-              // 底部操作区
               _buildBottomBar(appState),
             ],
           ),
@@ -153,7 +166,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   Widget _buildHeader(AppState appState) {
     return Container(
       padding: const EdgeInsets.all(16),
-      color: const Color(0xFF16213E),
+      color: _surface(context),
       child: Row(
         children: [
           Container(
@@ -168,11 +181,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
           ),
           const Spacer(),
           Text('第 ${appState.questionIndex} 题',
-              style: const TextStyle(color: Colors.white54, fontSize: 14)),
+              style: TextStyle(color: _textMuted(context), fontSize: 14)),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz,
-                color: Colors.white38, size: 20),
-            color: const Color(0xFF16213E),
+            icon: Icon(Icons.more_horiz,
+                color: _iconMuted(context), size: 20),
+            color: _surface(context),
             onSelected: (value) {
               if (value == 'stats') {
                 Navigator.of(context).push(MaterialPageRoute(
@@ -200,7 +213,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
       child: Column(
         children: [
           if (!_showAnswer)
-            // 阶段1：提交看答案
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -216,7 +228,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
             )
           else ...[
-            // 阶段2：自评对错
             Row(
               children: [
                 Expanded(
