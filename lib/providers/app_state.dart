@@ -46,9 +46,35 @@ class AppState extends ChangeNotifier {
   bool get loadingNext => _loadingNext;
   String? get lastError => _lastError;
 
-  /// 启动时从 SQLite 恢复持久化的 questionIndex
+  /// 从 app_config 表读取配置值（theme_mode, api_key, api_base_url 等）
+  Future<String?> getConfig(String key) async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.query('app_config', where: 'key = ?', whereArgs: [key]);
+      return rows.isEmpty ? null : rows.first['value'] as String?;
+    } catch (e) {
+      debugPrint('getConfig($key) failed: $e');
+      return null;
+    }
+  }
+
+  /// 写入 app_config 表
+  Future<void> setConfig(String key, String value) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.insert('app_config', {'key': key, 'value': value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// 启动时恢复持久化状态，使用 post-frame 延迟确保数据库已就绪
   Future<void> init() async {
-    _questionIndex = await _loadQuestionIndex();
+    try {
+      // 先触发数据库初始化（确保 database helper 已建立连接）
+      await DatabaseHelper.instance.database;
+      _questionIndex = await _loadQuestionIndex();
+    } catch (e) {
+      debugPrint('AppState.init() database error: $e');
+      // 数据库初始化失败时，保持默认值（questionIndex=0），不阻塞启动
+    }
   }
 
   Future<int> _loadQuestionIndex() async {

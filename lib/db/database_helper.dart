@@ -23,7 +23,14 @@ class DatabaseHelper {
       path,
       version: 2,
       onConfigure: (db) async {
-        await db.execute('PRAGMA journal_mode = WAL');
+        // WAL 模式可大幅提升并发读性能，但部分华为 EMUI 系统的 SQLite
+        // 实现中 PRAGMA 可能因为文件系统路径问题失败（OS error -2）。
+        // 这里捕获异常静默忽略——没有 WAL 只是写入稍慢，不影响功能。
+        try {
+          await db.execute('PRAGMA journal_mode = WAL');
+        } catch (_) {
+          // ignore: WAL not supported on this device
+        }
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: (db, version) async {
