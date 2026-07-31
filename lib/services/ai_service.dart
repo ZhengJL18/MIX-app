@@ -38,6 +38,31 @@ class OpenAiCompatibleAiService implements AiService {
   final String model;
   final String apiKey;
 
+  /// 通用对话（Hermes 本地 Agent 不可用时的替代实现）
+  Future<String> chat(String prompt) async {
+    final response = await http.post(
+      Uri.parse(baseUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({
+        'model': model,
+        'max_tokens': 2048,
+        'messages': [
+          {'role': 'system', 'content': '你是 MIX 学习助手，一个 AI 学习教练。用中文简洁回答。'},
+          {'role': 'user', 'content': prompt},
+        ],
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('AI 对话失败: ${response.statusCode} ${response.body}');
+    }
+    final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return data['choices']?[0]?['message']?['content'] as String? ?? '';
+  }
+
   @override
   Future<GeneratedQuestion> generateQuestion(String prompt) async {
     final response = await http.post(

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +6,8 @@ import 'theme/app_theme.dart';
 import 'providers/app_state.dart';
 import 'screens/practice_screen.dart';
 import 'services/agent_bridge.dart';
+import 'services/ai_service.dart';
+import 'data/preset_data.dart';
 import 'widgets/onboarding_flow.dart';
 
 void main() {
@@ -184,7 +184,7 @@ class _MainShellState extends State<_MainShell> {
   }
 }
 
-/// AI 对话页 — 显示 Hermes Agent 启动状态
+/// AI 对话页 — 优先用配置的外部 AI，Hermes 本地 Agent 作为补充状态显示
 class _ChatScreen extends StatefulWidget {
   final AgentBridge agent;
   const _ChatScreen({required this.agent});
@@ -194,87 +194,191 @@ class _ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<_ChatScreen> {
-  StreamSubscription? _sub;
-  String _status = '正在启动 Hermes...';
-  bool _ready = false;
-  String? _error;
+  final TextEditingController _input = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  final List<Map<String, String>> _messages = [];
+  bool _sending = false;
+
+  OpenAiCompatibleAiService? _ai;
 
   @override
   void initState() {
     super.initState();
-    _sub = widget.agent.events.listen((e) {
-      if (!mounted) return;
-      if (e is AgentBridgeStatus) {
-        setState(() {
-          _ready = true;
-          _status = e.message;
-          _error = null;
-        });
-      } else if (e is AgentBridgeError) {
-        setState(() {
-          _ready = false;
-          _error = e.message;
-        });
-      }
-    });
-    // 若 Agent 已在事件前就绪，直接取状态
-    if (widget.agent.isRunning) {
-      _status = 'Hermes 已就绪 (端口 ${widget.agent.port})';
-      _ready = true;
-    }
+    _loadAi();
+  }
+
+  Future<void> _loadAi() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = prefs.getString('api_key') ?? '';
+    final model = prefs.getString('ai_model') ?? '';
+    final vendor = prefs.getString('ai_vendor') ?? '';
+    if (key.isEmpty || model.isEmpty || vendor.isEmpty) return;
+
+    final preset = kAiVendors.where((v) => v.id == vendor).firstOrNull;
+    final base = preset?.baseUrl ?? '';
+    if (base.isEmpty) return;
+    final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
+    setState(() => _ai = OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key));
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _input.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending || _ai == null) return;
+    _input.clear();
+    setState(() {
+      _messages.add({'role': 'user', 'content': text});
+      _sending = true;
+    });
+    _scrollToBottom();
+    try {
+      final reply = await _ai!.chat(text);
+      if (!mounted) return;
+      setState(() {
+        _messages.add({'role': 'assistant', 'content': reply});
+        _sending = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add({'role': 'assistant', 'content': '⚠️ $e'});
+        _sending = false;
+      });
+    }
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFFFF8F0),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _ready ? Icons.check_circle : Icons.chat_bubble_outline,
-              color: _ready ? const Color(0xFF4ECDC4) : const Color(0xFF8B7355),
-              size: 64,
+      child: Column(
+        children: [
+          // 顶部 Hermes 状态条
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                Icon(Icons.bolt, size: 14, color: widget.agent.isRunning ? const Color(0xFF4ECDC4) : const Color(0xFFA09080)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    widget.agent.isRunning
+                        ? 'Hermes 本地已就绪'
+                        : '云端 AI 对话（本地 Hermes 尚未就绪）',
+                    style: const TextStyle(color: Color(0xFFA09080), fontSize: 12),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text('Hermes AI 对话',
-                style: const TextStyle(color: Color(0xFF8B7355), fontSize: 18)),
-            const SizedBox(height: 8),
-            Text(
-              _error ?? _status,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _error != null ? const Color(0xFFFF6B6B) : const Color(0xFFA09080),
-                fontSize: 14,
-              ),
+          ),
+          const Divider(height: 1),
+          // 消息列表
+          Expanded(
+            child: _messages.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_outline, color: Color(0xFF8B7355), size: 56),
+                        SizedBox(height: 12),
+                        Text('问我任何学习问题',
+                            style: TextStyle(color: Color(0xFF8B7355), fontSize: 16)),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _messages.length,
+                    itemBuilder: (_, i) {
+                      final m = _messages[i];
+                      final isUser = m['role'] == 'user';
+                      return Align(
+                        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          constraints: const BoxConstraints(maxWidth: 300),
+                          decoration: BoxDecoration(
+                            color: isUser ? const Color(0xFFFF6B35) : const Color(0xFFF0E0D0),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            m['content'] ?? '',
+                            style: TextStyle(
+                              color: isUser ? Colors.white : const Color(0xFF2D1810),
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          // 输入区
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    enabled: _ai != null && !_sending,
+                    onSubmitted: (_) => _send(),
+                    decoration: InputDecoration(
+                      hintText: _ai == null ? '请先在设置中配置 AI' : '输入问题...',
+                      hintStyle: const TextStyle(color: Color(0xFFA09080)),
+                      filled: true,
+                      fillColor: const Color(0xFFFFFFFF),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _ai != null ? _send : null,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _ai != null ? const Color(0xFFFF6B35) : const Color(0xFFE0D5C7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: _sending
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send, size: 18, color: Colors.white),
+                  ),
+                ),
+              ],
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _error = null;
-                    _status = '正在重新启动 Hermes...';
-                  });
-                  widget.agent.start();
-                },
-                child: const Text('重试'),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
-
 /// 文件管理页 — 显示 Hermes 运行状态 + bundle 信息
 class _FilesScreen extends StatelessWidget {
   final AgentBridge agent;
