@@ -21,7 +21,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'mix.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         // WAL 模式可大幅提升并发读性能，但部分 Android 系统的 SQLite
         // 实现中 PRAGMA 可能因底层文件系统/路径问题报错。
@@ -35,6 +35,13 @@ class DatabaseHelper {
       },
       onCreate: (db, version) async {
         await _createSchema(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v1 → v2：questions 表加 options（选择题选项）和 explanation（解析）列
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE questions ADD COLUMN options TEXT');
+          await db.execute('ALTER TABLE questions ADD COLUMN explanation TEXT');
+        }
       },
     );
   }
@@ -100,6 +107,8 @@ class DatabaseHelper {
         kp_id INTEGER NOT NULL REFERENCES knowledge_points(id),
         content TEXT NOT NULL,
         answer TEXT NOT NULL,
+        options TEXT,
+        explanation TEXT,
         cplx_coef REAL,
         und_coef REAL,
         red_coef REAL,

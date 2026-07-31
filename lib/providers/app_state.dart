@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/feedback_v2.dart';
 import '../engine/selection.dart';
+import '../data/preset_data.dart';
 import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
 import '../repository/practice_repository.dart';
@@ -18,6 +20,8 @@ class AppState extends ChangeNotifier {
   AppState({AiService? aiService})
       : _aiService = aiService ?? MockAiService() {
     _pregen = PregenerationService(aiService: _aiService);
+    // 启动时加载用户保存的 AI 配置，避免重启后静默降级成示例题
+    _loadSavedAiConfig();
   }
 
   final SubjectRepository subjectRepo = SubjectRepository();
@@ -48,6 +52,27 @@ class AppState extends ChangeNotifier {
   void configureAiService(AiService service) {
     _aiService = service;
     _pregen = PregenerationService(aiService: _aiService);
+  }
+
+  /// 启动时从 SharedPreferences 读取用户配置的真实 AI 服务。
+  /// 未配置（或配置不完整）时保持 MockAiService 兜底。
+  Future<void> _loadSavedAiConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = prefs.getString('api_key') ?? '';
+      final model = prefs.getString('ai_model') ?? '';
+      final vendor = prefs.getString('ai_vendor') ?? '';
+      if (key.isEmpty || model.isEmpty || vendor.isEmpty) return;
+
+      final preset = kAiVendors.where((v) => v.id == vendor).firstOrNull;
+      final base = preset?.baseUrl ?? prefs.getString('ai_base_url') ?? '';
+      if (base.isEmpty) return;
+
+      final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
+      configureAiService(OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key));
+    } catch (e) {
+      debugPrint('[AppState] 加载 AI 配置失败: $e');
+    }
   }
 
   /// 三层筛选 + 出题：选科目 -> 选知识点 -> 取/生成题目。

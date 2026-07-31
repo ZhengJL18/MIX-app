@@ -95,7 +95,9 @@ class PregenerationService {
     return _questionRepo.insertQuestion(
       kpId: kpId,
       content: generated.content,
-      answer: generated.answer,
+      answer: generated.correctAnswer,
+      options: generated.options,
+      explanation: generated.explanation,
       cplxCoef: generated.cplxCoef,
       undCoef: generated.undCoef,
       redCoef: generated.redCoef,

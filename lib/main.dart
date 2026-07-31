@@ -391,7 +391,7 @@ class _ChatScreenState extends State<_ChatScreen> {
     if (key.isEmpty || model.isEmpty || vendor.isEmpty) return;
 
     final preset = kAiVendors.where((v) => v.id == vendor).firstOrNull;
-    final base = preset?.baseUrl ?? '';
+    final base = preset?.baseUrl ?? prefs.getString('ai_base_url') ?? '';
     if (base.isEmpty) return;
     final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
     setState(() => _ai = OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key));

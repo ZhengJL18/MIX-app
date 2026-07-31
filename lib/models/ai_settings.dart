@@ -14,7 +14,7 @@ class HermesProvider {
 }
 
 /// App vendor id → Hermes provider 映射。
-/// 与 kAiVendors 的 id 一一对应。
+/// 与 kAiVendors 的 id 一一对应；custom 走自定义 endpoint + OPENAI_API_KEY。
 const Map<String, HermesProvider> kHermesProviderMap = {
   'deepseek': HermesProvider(providerId: 'deepseek', envKey: 'DEEPSEEK_API_KEY'),
   'qwen': HermesProvider(providerId: 'alibaba', envKey: 'DASHSCOPE_API_KEY'),
@@ -22,6 +22,7 @@ const Map<String, HermesProvider> kHermesProviderMap = {
   'moonshot': HermesProvider(providerId: 'kimi-coding-cn', envKey: 'KIMI_CN_API_KEY'),
   'zhipu': HermesProvider(providerId: 'zai', envKey: 'GLM_API_KEY'),
   'gemini': HermesProvider(providerId: 'gemini', envKey: 'GOOGLE_API_KEY'),
+  'custom': HermesProvider(providerId: 'openai-api', envKey: 'OPENAI_API_KEY'),
 };
 
 /// AI 配置：App 与本地 Hermes Agent 共用同一份（vendor + 模型 + key + baseUrl）。
@@ -46,13 +47,14 @@ class AiSettings {
   HermesProvider? get hermesProvider => kHermesProviderMap[vendorId];
 
   /// 从 SharedPreferences 读取（与 onboarding 共用 ai_vendor/ai_model/api_key key）。
+  /// 自定义厂商（vendorId == 'custom'）读 ai_base_url 作为 endpoint。
   static Future<AiSettings?> load() async {
     final prefs = await SharedPreferences.getInstance();
     final vendorId = prefs.getString('ai_vendor') ?? '';
     final model = prefs.getString('ai_model') ?? '';
     final apiKey = prefs.getString('api_key') ?? '';
     final preset = kAiVendors.where((v) => v.id == vendorId).firstOrNull;
-    final baseUrl = preset?.baseUrl ?? '';
+    final baseUrl = preset?.baseUrl ?? prefs.getString('ai_base_url') ?? '';
     final settings = AiSettings(
       vendorId: vendorId,
       model: model,
@@ -68,5 +70,8 @@ class AiSettings {
     await prefs.setString('ai_vendor', vendorId);
     await prefs.setString('ai_model', model);
     await prefs.setString('api_key', apiKey);
+    if (vendorId == 'custom' && baseUrl.isNotEmpty) {
+      await prefs.setString('ai_base_url', baseUrl);
+    }
   }
 }

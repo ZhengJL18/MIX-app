@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../data/preset_data.dart';
 import '../models/ai_settings.dart';
+import '../providers/app_state.dart';
 import '../services/agent_bridge.dart';
+import '../services/ai_service.dart';
 import '../theme/app_colors.dart';
 
 /// AI 设置页（二级页面）— 配置对话与本地 Hermes Agent 共用的模型。
@@ -15,9 +18,10 @@ class AiSettingsScreen extends StatefulWidget {
 }
 
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
-  late AiVendorPreset _vendor;
+  String _vendorId = kAiVendors.first.id;
   late TextEditingController _modelCtrl;
   late TextEditingController _keyCtrl;
+  late TextEditingController _baseUrlCtrl;
   bool _obscureKey = true;
   bool _saving = false;
   bool _loaded = false;
@@ -27,6 +31,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     super.initState();
     _modelCtrl = TextEditingController();
     _keyCtrl = TextEditingController();
+    _baseUrlCtrl = TextEditingController();
     _loadCurrent();
   }
 
@@ -34,40 +39,64 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   void dispose() {
     _modelCtrl.dispose();
     _keyCtrl.dispose();
+    _baseUrlCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadCurrent() async {
     final existing = await widget.agent.readAiSettings();
-    final vendorId = existing?.vendorId ?? kAiVendors.first.id;
-    _vendor = kAiVendors.firstWhere((v) => v.id == vendorId,
-        orElse: () => kAiVendors.first);
-    _modelCtrl.text = existing?.model ?? _vendor.models.first;
+    _vendorId = existing?.vendorId ?? kAiVendors.first.id;
+    _modelCtrl.text = existing?.model ?? kAiVendors.first.models.first;
     _keyCtrl.text = existing?.apiKey ?? '';
+    _baseUrlCtrl.text = existing?.baseUrl ?? '';
     if (mounted) setState(() => _loaded = true);
   }
+
+  bool get _isCustom => _vendorId == 'custom';
+
+  AiVendorPreset? get _preset =>
+      kAiVendors.where((v) => v.id == _vendorId).firstOrNull;
 
   Future<void> _save() async {
     final model = _modelCtrl.text.trim();
     final key = _keyCtrl.text.trim();
+    final base = _isCustom
+        ? _baseUrlCtrl.text.trim()
+        : _preset?.baseUrl ?? '';
     if (model.isEmpty || key.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请填写模型和 API Key')),
       );
       return;
     }
+    if (base.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请填写 Base URL')),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
     final settings = AiSettings(
-      vendorId: _vendor.id,
+      vendorId: _vendorId,
       model: model,
       apiKey: key,
-      baseUrl: _vendor.baseUrl,
+      baseUrl: base,
     );
+
+    // 同步给刷题出题（AppState）与 Hermes 本地 Agent
+    final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
+    if (mounted) {
+      context.read<AppState>().configureAiService(
+        OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key),
+      );
+    }
     await widget.agent.applyAiSettings(settings);
+
     if (!mounted) return;
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已保存，对话与本地 Hermes 将使用此模型')),
+      const SnackBar(content: Text('已保存，刷题出题与本地 Hermes 将使用此模型')),
     );
     Navigator.of(context).pop(true);
   }
@@ -98,7 +127,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '这里配置的模型会同时用于「AI 对话」和本地 Hermes Agent，两处共用同一个模型与 Key。',
+                          '这里配置的模型会同时用于「刷题出题」「AI 对话」和本地 Hermes Agent，三处共用同一个模型与 Key。',
                           style: TextStyle(color: Color(0xFF2D1810), fontSize: 13, height: 1.5),
                         ),
                       ),
@@ -112,22 +141,15 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue: _vendor.id,
+                  initialValue: _vendorId,
                   isExpanded: true,
                   decoration: _fieldDecoration('选择厂商'),
-                  items: kAiVendors
-                      .map((v) => DropdownMenuItem(value: v.id, child: Text(v.name)))
-                      .toList(),
+                  items: [
+                    ...kAiVendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name))),
+                    const DropdownMenuItem(value: 'custom', child: Text('✏️ 自定义')),
+                  ],
                   onChanged: (id) {
-                    final next = kAiVendors.firstWhere((v) => v.id == id);
-                    setState(() {
-                      _vendor = next;
-                      // 切换厂商时若模型输入还是旧厂商的，则用新厂商默认模型
-                      final presetModels = next.models;
-                      if (!presetModels.contains(_modelCtrl.text)) {
-                        _modelCtrl.text = presetModels.first;
-                      }
-                    });
+                    setState(() => _vendorId = id!);
                   },
                 ),
                 const SizedBox(height: 20),
@@ -138,14 +160,28 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _modelCtrl,
-                  decoration: _fieldDecoration('如 ${_vendor.models.first}'),
+                  decoration: _fieldDecoration(_isCustom ? '如 my-model' : '如 ${_preset?.models.first}'),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '推荐：${_vendor.models.join('、')}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.lightTextMuted),
-                ),
+                if (_preset != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '推荐：${_preset!.models.join('、')}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.lightTextMuted),
+                  ),
+                ],
                 const SizedBox(height: 20),
+
+                // ── Base URL（仅自定义厂商） ──
+                if (_isCustom) ...[
+                  const Text('Base URL',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _baseUrlCtrl,
+                    decoration: _fieldDecoration('如 https://api.example.com/v1'),
+                  ),
+                  const SizedBox(height: 20),
+                ],
 
                 // ── API Key ──
                 const Text('API Key',
@@ -154,7 +190,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 TextField(
                   controller: _keyCtrl,
                   obscureText: _obscureKey,
-                  decoration: _fieldDecoration(_vendor.keyHint).copyWith(
+                  decoration: _fieldDecoration(_isCustom ? '粘贴 API Key' : (_preset?.keyHint ?? '粘贴 API Key')).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureKey ? Icons.visibility_off : Icons.visibility,

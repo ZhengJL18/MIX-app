@@ -31,7 +31,7 @@ class PromptBuilder {
     final redundancy = (state['redundancy'] as num).toDouble();
     final coverage = (state['coverage'] as num).toDouble();
 
-    return '''请为以下知识点生成一道练习题：
+    return '''请为以下知识点生成一道单选题：
 
 科目：${subject['name']}
 知识点：$kpName
@@ -44,12 +44,23 @@ class PromptBuilder {
 - 综合掌握度：${composite.toStringAsFixed(2)}
 $errorDistStr
 
-请以Markdown格式返回：
+要求：生成一道单选题，必须包含 4 个选项（A/B/C/D），且只有一个正确选项。难度与知识点匹配，干扰项合理。
+
+请严格按以下 Markdown 格式返回：
 ## 题目
-[题目内容]
+[题干]
+
+## 选项
+A. [选项A]
+B. [选项B]
+C. [选项C]
+D. [选项D]
 
 ## 答案
-[标准答案]
+[A/B/C/D 单个大写字母]
+
+## 解析
+[简要解析，说明为什么选它]
 
 ## 系数
 - 复杂度：X.XX

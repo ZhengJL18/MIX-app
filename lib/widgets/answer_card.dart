@@ -1,16 +1,25 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'rich_content.dart';
 
-/// 答案卡片 — 显示答案 + 解析 + 答对/答错按钮
+/// 答案卡片 — 展示判卷结果 + 答案 + 解析。
+///
+/// 选择题：用户选中选项后由父级判定对错，这里展示结果，无需手动按钮。
+/// 非选择题（历史遗留无选项题）：展示答案并保留手动"答对/答错"按钮兜底。
 class AnswerCard extends StatelessWidget {
   final Map<String, dynamic> question;
+  final String? selectedOption;
+  final bool isCorrect;
   final VoidCallback onCorrect;
   final VoidCallback onWrong;
 
   const AnswerCard({
     super.key,
     required this.question,
+    this.selectedOption,
+    required this.isCorrect,
     required this.onCorrect,
     required this.onWrong,
   });
@@ -24,18 +33,28 @@ class AnswerCard extends StatelessWidget {
     final und = question['und_coef'];
     final red = question['red_coef'];
     final cov = question['cov_coef'];
+    final hasOptions = _parseOptions(question['options']).isNotEmpty;
 
     return Container(
       color: AppColors.lightBg,
       child: Column(
         children: [
-          // 内容区：可滚动，滚到底后下滑自然翻页（嵌套滚动）
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 判卷结果（选择题）
+                  if (hasOptions) ...[
+                    _ResultBanner(
+                      answered: selectedOption != null,
+                      isCorrect: isCorrect,
+                      selected: selectedOption,
+                      answer: answer,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   // 参考答案
                   Container(
                     width: double.infinity,
@@ -52,9 +71,10 @@ class AnswerCard extends StatelessWidget {
                           children: [
                             Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 18),
                             const SizedBox(width: 6),
-                            Text('参考答案', style: TextStyle(
-                              color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15,
-                            )),
+                            Text('参考答案',
+                                style: TextStyle(
+                                  color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15,
+                                )),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -82,6 +102,12 @@ class AnswerCard extends StatelessWidget {
                   // 四维系数
                   if (cplx != null || und != null || red != null || cov != null) ...[
                     const SizedBox(height: 12),
+                    const Row(
+                      children: [
+                        Text('出题参考系数：', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         _CoefChip('复杂度', cplx, AppColors.primary),
@@ -99,45 +125,127 @@ class AnswerCard extends StatelessWidget {
               ),
             ),
           ),
-          // 底部固定按钮区
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: onCorrect,
-                      icon: const Icon(Icons.check, size: 20),
-                      label: const Text('答对了', style: TextStyle(fontSize: 16)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.correct,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          // 底部固定按钮区（仅非选择题兜底）
+          if (!hasOptions)
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: onCorrect,
+                        icon: const Icon(Icons.check, size: 20),
+                        label: const Text('答对了', style: TextStyle(fontSize: 16)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.correct,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: onWrong,
-                      icon: const Icon(Icons.close, size: 20),
-                      label: const Text('答错了', style: TextStyle(fontSize: 16)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.wrong,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: onWrong,
+                        icon: const Icon(Icons.close, size: 20),
+                        label: const Text('答错了', style: TextStyle(fontSize: 16)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.wrong,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  static List<String> _parseOptions(dynamic raw) {
+    if (raw == null) return const [];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    try {
+      final decoded = jsonDecode(raw as String);
+      if (decoded is List) return decoded.map((e) => e.toString()).toList();
+    } catch (_) {}
+    return const [];
+  }
+}
+
+/// 判卷结果横幅
+class _ResultBanner extends StatelessWidget {
+  final bool answered;
+  final bool isCorrect;
+  final String? selected;
+  final String answer;
+
+  const _ResultBanner({
+    required this.answered,
+    required this.isCorrect,
+    required this.selected,
+    required this.answer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color;
+    final IconData icon;
+    final String title;
+    if (!answered) {
+      color = AppColors.lightTextMuted;
+      icon = Icons.help_outline;
+      title = '未作答 · 提交时将计为错误';
+    } else if (isCorrect) {
+      color = AppColors.correct;
+      icon = Icons.check_circle;
+      title = '回答正确！';
+    } else {
+      color = AppColors.wrong;
+      icon = Icons.cancel;
+      title = '回答错误';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
+            ],
           ),
+          if (answered && !isCorrect) ...[
+            const SizedBox(height: 6),
+            Text('你的答案：$selected',
+                style: const TextStyle(color: Color(0xFF2D1810), fontSize: 13)),
+            const SizedBox(height: 2),
+            Text('正确答案：$answer',
+                style: const TextStyle(color: Color(0xFF2D1810), fontSize: 13)),
+          ],
+          if (answered && isCorrect) ...[
+            const SizedBox(height: 6),
+            Text('你的答案：$selected',
+                style: const TextStyle(color: Color(0xFF2D1810), fontSize: 13)),
+          ],
         ],
       ),
     );

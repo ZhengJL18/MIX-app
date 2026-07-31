@@ -5,6 +5,16 @@ import 'package:http/http.dart' as http;
 class GeneratedQuestion {
   final String content;
   final String answer;
+
+  /// 选择题选项（A/B/C/D 顺序）。非选择题为空列表。
+  final List<String> options;
+
+  /// 正确选项文本（选择题）；非选择题为答案原文。
+  final String correctAnswer;
+
+  /// 解析（可选，存库后在答案页展示）。
+  final String? explanation;
+
   final double? cplxCoef;
   final double? undCoef;
   final double? redCoef;
@@ -13,11 +23,14 @@ class GeneratedQuestion {
   GeneratedQuestion({
     required this.content,
     required this.answer,
+    this.options = const [],
+    String? correctAnswer,
+    this.explanation,
     this.cplxCoef,
     this.undCoef,
     this.redCoef,
     this.covCoef,
-  });
+  }) : correctAnswer = correctAnswer ?? answer;
 }
 
 /// AI 出题服务的抽象接口，方便替换成任意厂商 API 或本地模型。
@@ -209,7 +222,7 @@ class AnthropicAiService implements AiService {
   }
 
   /// 解析 build_prompt 中约定的 Markdown 返回格式：
-  /// ## 题目 / ## 答案 / ## 系数（复杂度/理解难度/冗余度/覆盖率）。
+  /// ## 题目 / ## 选项 / ## 答案 / ## 解析 / ## 系数。
   static GeneratedQuestion parseMarkdownResponse(String text) {
     String extractSection(String header, String stopHeaderPattern) {
       final pattern = RegExp(
@@ -220,8 +233,10 @@ class AnthropicAiService implements AiService {
       return match?.group(1)?.trim() ?? '';
     }
 
-    final content = extractSection('题目', '答案|系数');
-    final answer = extractSection('答案', '系数');
+    final content = extractSection('题目', '选项|答案|解析|系数');
+    final optionsSection = extractSection('选项', '答案|解析|系数');
+    final answerSection = extractSection('答案', '解析|系数');
+    final explanation = extractSection('解析', '系数');
     final coefSection = extractSection('系数', r'.^');
 
     double? extractCoef(String label) {
@@ -230,9 +245,30 @@ class AnthropicAiService implements AiService {
       return double.tryParse(m.group(1)!);
     }
 
+    // 解析选项行：A. xxx / A.xxx / A、xxx
+    final options = <String>[];
+    for (final line in optionsSection.split('\n')) {
+      final m = RegExp(r'^\s*[A-D][.、)．]\s*(.+)$').firstMatch(line.trim());
+      if (m != null) options.add(m.group(1)!.trim());
+    }
+
+    // 答案可能是单个大写字母（A-D）或选项文本 → 统一成选项文本
+    String? correctText;
+    final letter = answerSection.trim().toUpperCase();
+    if (RegExp(r'^[A-D]$').hasMatch(letter) && letter.isNotEmpty) {
+      final idx = letter.codeUnitAt(0) - 'A'.codeUnitAt(0);
+      if (idx < options.length) correctText = options[idx];
+    }
+    if (correctText == null && answerSection.isNotEmpty) {
+      correctText = answerSection.trim();
+    }
+
     return GeneratedQuestion(
       content: content.isEmpty ? text : content,
-      answer: answer,
+      answer: correctText ?? answerSection,
+      options: options,
+      correctAnswer: correctText ?? answerSection,
+      explanation: explanation.isEmpty ? null : explanation,
       cplxCoef: extractCoef('复杂度'),
       undCoef: extractCoef('理解难度'),
       redCoef: extractCoef('冗余度'),
@@ -244,12 +280,22 @@ class AnthropicAiService implements AiService {
 /// 离线/演示用的假实现：不联网，直接基于知识点生成占位题目。
 /// 在没有配置 API Key 时用它兜底，保证 App 仍可运行、可演示流程。
 class MockAiService implements AiService {
+  /// 未配置 AI 时的兜底单选题。
+  static const List<String> _mockOptions = [
+    '选项 A（示例）',
+    '选项 B（示例）',
+    '选项 C（示例）',
+    '选项 D（示例）',
+  ];
+
   @override
   Future<GeneratedQuestion> generateQuestion(String prompt) async {
     await Future.delayed(const Duration(milliseconds: 300));
     return GeneratedQuestion(
-      content: '（示例题目，尚未配置 AI 接口）\n\n$prompt',
-      answer: '（示例答案，请在设置中配置 AI 接口以获取真实题目）',
+      content: '（示例题目，尚未配置 AI 接口，请先在设置中配置）\n\n$prompt',
+      options: _mockOptions,
+      correctAnswer: _mockOptions.first,
+      explanation: '这是占位示例题目。配置真实的 AI 接口后，会为你生成对应知识点的单选题。',
       cplxCoef: 0.4,
       undCoef: 0.4,
       redCoef: 0.2,
@@ -262,14 +308,16 @@ class MockAiService implements AiService {
     String prompt,
     void Function(String accumulated) onDelta,
   ) async {
-    final text = '（示例题目，尚未配置 AI 接口）\n\n$prompt';
+    final text = '（示例题目，尚未配置 AI 接口，请先在设置中配置）\n\n$prompt';
     for (var i = 1; i <= text.length; i += 20) {
       onDelta(text.substring(0, i));
       await Future.delayed(const Duration(milliseconds: 30));
     }
     return GeneratedQuestion(
       content: text,
-      answer: '（示例答案，请在设置中配置 AI 接口以获取真实题目）',
+      options: _mockOptions,
+      correctAnswer: _mockOptions.first,
+      explanation: '这是占位示例题目。配置真实的 AI 接口后，会为你生成对应知识点的单选题。',
       cplxCoef: 0.4,
       undCoef: 0.4,
       redCoef: 0.2,

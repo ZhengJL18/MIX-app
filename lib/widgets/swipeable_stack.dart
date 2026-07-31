@@ -13,11 +13,16 @@ class SwipeableStack extends StatefulWidget {
   final int initialIndex;
   final ValueChanged<int>? onPageChanged;
 
+  /// 外部 PageController（可选）。传入后由外部控制跳页，
+  /// 便于在"校验失败回跳"等场景强制回到某一页。
+  final PageController? controller;
+
   const SwipeableStack({
     super.key,
     required this.pages,
     this.initialIndex = 0,
     this.onPageChanged,
+    this.controller,
   });
 
   @override
@@ -32,12 +37,13 @@ class _SwipeableStackState extends State<SwipeableStack> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex.clamp(0, widget.pages.length - 1);
-    _pageCtrl = PageController(initialPage: _currentIndex);
+    _pageCtrl = widget.controller ?? PageController(initialPage: _currentIndex);
   }
 
   @override
   void dispose() {
-    _pageCtrl.dispose();
+    // 外部传入的 controller 由外部负责释放
+    if (widget.controller == null) _pageCtrl.dispose();
     super.dispose();
   }
 

@@ -1,21 +1,29 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'rich_content.dart';
 
-/// 题目卡片 — 纯展示题干
-/// 多题型支持：根据 type 字段渲染不同交互组件
+/// 题目卡片 — 展示题干 + 选择题选项单选。
+///
+/// 选项选中状态由父级（PracticeScreen）持有，这里只渲染并回调，
+/// 父级根据所选选项与正确答案比对完成自动判卷。
 class QuestionCard extends StatelessWidget {
   final Map<String, dynamic> question;
+  final String? selectedOption;
+  final ValueChanged<String?> onOptionSelected;
 
   const QuestionCard({
     super.key,
     required this.question,
+    this.selectedOption,
+    required this.onOptionSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final type = question['type'] as String? ?? 'text';
+    final options = _parseOptions(question['options']);
 
     return Container(
       color: AppColors.lightBg,
@@ -23,7 +31,6 @@ class QuestionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 顶部信息：只显示题型标签，不显示题号
           Row(
             children: [
               Container(
@@ -32,8 +39,8 @@ class QuestionCard extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  _typeLabel(type),
+                child: const Text(
+                  '单选题',
                   style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -43,255 +50,121 @@ class QuestionCard extends StatelessWidget {
           // 题干
           Expanded(
             child: SingleChildScrollView(
-              child: RichContent(
-                content: question['content'] as String? ?? '',
-                style: t.bodyLarge?.copyWith(fontSize: 18, height: 1.7),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichContent(
+                    content: question['content'] as String? ?? '',
+                    style: t.bodyLarge?.copyWith(fontSize: 18, height: 1.7),
+                  ),
+                  const SizedBox(height: 24),
+                  // 选项
+                  if (options.isNotEmpty) ...[
+                    const Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
+                    const SizedBox(height: 12),
+                    for (var i = 0; i < options.length; i++)
+                      _OptionButton(
+                        label: String.fromCharCode('A'.codeUnitAt(0) + i),
+                        option: options[i],
+                        selected: selectedOption == options[i],
+                        onTap: () => onOptionSelected(
+                          selectedOption == options[i] ? null : options[i],
+                        ),
+                      ),
+                  ] else ...[
+                    const Text(
+                      '（该题为非选择题，请在答案页参考答案后自评对错）',
+                      style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
-          // 根据题型渲染交互区
-          _QuestionInteractions(type: type, question: question),
         ],
       ),
     );
   }
 
-  String _typeLabel(String type) {
-    switch (type) {
-      case 'multiple_choice': return '选择题';
-      case 'fill_blank': return '填空题';
-      case 'true_false': return '判断题';
-      case 'matching': return '匹配题';
-      case 'ordering': return '排序题';
-      default: return '问答题';
-    }
+  /// 从数据库 options 字段（JSON 数组字符串）解析选项列表。
+  static List<String> _parseOptions(dynamic raw) {
+    if (raw == null) return const [];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    try {
+      final decoded = jsonDecode(raw as String);
+      if (decoded is List) return decoded.map((e) => e.toString()).toList();
+    } catch (_) {}
+    return const [];
   }
 }
 
-class _QuestionInteractions extends StatelessWidget {
-  final String type;
-  final Map<String, dynamic> question;
+/// 单个选项按钮
+class _OptionButton extends StatelessWidget {
+  final String label;
+  final String option;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _QuestionInteractions({required this.type, required this.question});
-
-  @override
-  Widget build(BuildContext context) {
-    switch (type) {
-      case 'multiple_choice':
-        return _ChoiceInteraction(question: question);
-      case 'true_false':
-        return _TrueFalseInteraction();
-      case 'fill_blank':
-        return _FillBlankInteraction();
-      case 'matching':
-        return _MatchingInteraction(question: question);
-      case 'ordering':
-        return _OrderingInteraction(question: question);
-      default:
-        return _TextInteraction();
-    }
-  }
-}
-
-// ─── 选择题选项 ───
-
-class _ChoiceInteraction extends StatefulWidget {
-  final Map<String, dynamic> question;
-  const _ChoiceInteraction({required this.question});
-
-  @override
-  State<_ChoiceInteraction> createState() => _ChoiceInteractionState();
-}
-
-class _ChoiceInteractionState extends State<_ChoiceInteraction> {
-  String? _selected;
+  const _OptionButton({
+    required this.label,
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final options = (widget.question['options'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        [];
-
-    return Column(
-      children: options.map((opt) {
-        final isSelected = _selected == opt;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: GestureDetector(
-            onTap: () => setState(() => _selected = opt),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primaryLight : AppColors.lightSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isSelected ? AppColors.primary : AppColors.lightDivider,
-                  width: isSelected ? 2 : 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                    color: isSelected ? AppColors.primary : AppColors.lightTextMuted,
-                    size: 20,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primaryLight : AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.lightDivider,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? AppColors.primary : Colors.transparent,
+                  border: Border.all(
+                    color: selected ? AppColors.primary : AppColors.lightTextMuted,
+                    width: 2,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(opt)),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-// ─── 判断题 ───
-
-class _TrueFalseInteraction extends StatefulWidget {
-  const _TrueFalseInteraction();
-
-  @override
-  State<_TrueFalseInteraction> createState() => _TrueFalseInteractionState();
-}
-
-class _TrueFalseInteractionState extends State<_TrueFalseInteraction> {
-  String? _selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() => _selected = '正确'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              decoration: BoxDecoration(
-                color: _selected == '正确' ? AppColors.correct.withValues(alpha: 0.1) : AppColors.lightSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _selected == '正确' ? AppColors.correct : AppColors.lightDivider,
-                  width: 2,
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : AppColors.lightTextMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              child: Center(
-                child: Text('✅ 正确', style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: _selected == '正确' ? AppColors.correct : AppColors.lightTextMuted,
-                )),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() => _selected = '错误'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              decoration: BoxDecoration(
-                color: _selected == '错误' ? AppColors.wrong.withValues(alpha: 0.1) : AppColors.lightSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _selected == '错误' ? AppColors.wrong : AppColors.lightDivider,
-                  width: 2,
+              const SizedBox(width: 12),
+              Expanded(
+                child: RichContent(
+                  content: option,
+                  style: const TextStyle(color: AppColors.lightText, fontSize: 15, height: 1.5),
                 ),
               ),
-              child: Center(
-                child: Text('❌ 错误', style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: _selected == '错误' ? AppColors.wrong : AppColors.lightTextMuted,
-                )),
-              ),
-            ),
+            ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-// ─── 填空题 ───
-
-class _FillBlankInteraction extends StatelessWidget {
-  const _FillBlankInteraction();
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      decoration: InputDecoration(
-        hintText: '输入你的答案...',
-        filled: true,
-        fillColor: AppColors.lightSurface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.lightDivider),
-        ),
-        contentPadding: const EdgeInsets.all(16),
       ),
-      maxLines: 3,
-    );
-  }
-}
-
-// ─── 匹配题 ───
-
-class _MatchingInteraction extends StatelessWidget {
-  final Map<String, dynamic> question;
-  const _MatchingInteraction({required this.question});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Text('请在答案页查看匹配题答案',
-        style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14)),
-    );
-  }
-}
-
-// ─── 排序题 ───
-
-class _OrderingInteraction extends StatelessWidget {
-  final Map<String, dynamic> question;
-  const _OrderingInteraction({required this.question});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Text('请在答案页查看排序题答案',
-        style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14)),
-    );
-  }
-}
-
-// ─── 问答题 ───
-
-class _TextInteraction extends StatelessWidget {
-  const _TextInteraction();
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      decoration: InputDecoration(
-        hintText: '输入你的回答...',
-        filled: true,
-        fillColor: AppColors.lightSurface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.lightDivider),
-        ),
-        contentPadding: const EdgeInsets.all(16),
-      ),
-      maxLines: 4,
     );
   }
 }

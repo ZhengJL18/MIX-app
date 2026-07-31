@@ -26,6 +26,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   String? _selectedVendorId;
   String? _selectedModel;
   String? _apiKey;
+  String? _customBaseUrl; // 自定义厂商的 base URL
   SubIdentity? _selectedIdentity;
   final Map<String, int> _subjectProgress = {}; // 科目名 → 档位索引
   final List<String> _customSubjects = [];
@@ -45,6 +46,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         selectedVendorId: _selectedVendorId,
         selectedModel: _selectedModel,
         apiKey: _apiKey,
+        customBaseUrl: _customBaseUrl,
         availableModels: _availableModels,
         onVendorChanged: (id, models) {
           setState(() {
@@ -55,6 +57,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         },
         onModelChanged: (m) => setState(() => _selectedModel = m),
         onKeyChanged: (k) => setState(() => _apiKey = k),
+        onCustomBaseUrlChanged: (url) => setState(() => _customBaseUrl = url),
       ),
       _StepIdentity(
         selectedIdentity: _selectedIdentity,
@@ -111,6 +114,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await prefs.setString('ai_vendor', _selectedVendorId ?? '');
     await prefs.setString('ai_model', _selectedModel ?? '');
     await prefs.setString('api_key', _apiKey ?? '');
+    if (_selectedVendorId == 'custom' && _customBaseUrl != null && _customBaseUrl!.isNotEmpty) {
+      await prefs.setString('ai_base_url', _customBaseUrl!);
+    }
     await prefs.setString('identity', _selectedIdentity?.name ?? '');
     await prefs.setBool('onboarding_complete', true);
 
@@ -120,7 +126,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     final key = _apiKey;
     if (vendorId != null && model != null && key != null && key.isNotEmpty) {
       final vendor = kAiVendors.where((v) => v.id == vendorId).firstOrNull;
-      final base = vendor?.baseUrl;
+      final base = vendorId == 'custom'
+          ? _customBaseUrl
+          : vendor?.baseUrl;
       if (base != null && base.isNotEmpty) {
         // 预设厂商 baseUrl 形如 https://api.deepseek.com/v1 → 拼 chat/completions
         final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
@@ -166,19 +174,23 @@ class _StepAiConfig extends StatelessWidget {
   final String? selectedVendorId;
   final String? selectedModel;
   final String? apiKey;
+  final String? customBaseUrl;
   final List<String> availableModels;
   final void Function(String id, List<String> models) onVendorChanged;
   final ValueChanged<String>? onModelChanged;
   final ValueChanged<String>? onKeyChanged;
+  final ValueChanged<String>? onCustomBaseUrlChanged;
 
   const _StepAiConfig({
     required this.selectedVendorId,
     required this.selectedModel,
     required this.apiKey,
+    required this.customBaseUrl,
     required this.availableModels,
     required this.onVendorChanged,
     required this.onModelChanged,
     required this.onKeyChanged,
+    required this.onCustomBaseUrlChanged,
   });
 
   @override
@@ -220,7 +232,12 @@ class _StepAiConfig extends StatelessWidget {
                 // 自定义厂商
                 _CustomVendorCard(
                   selected: selectedVendorId == 'custom',
-                  onSelect: (id, models) => onVendorChanged(id, models),
+                  baseUrl: customBaseUrl,
+                  onBaseUrlChanged: (url) => onCustomBaseUrlChanged?.call(url),
+                  onSelect: (id, models) {
+                    onVendorChanged(id, models);
+                    onCustomBaseUrlChanged?.call(customBaseUrl ?? '');
+                  },
                 ),
                 const SizedBox(height: 20),
                 // 模型选择
@@ -762,9 +779,16 @@ class _VendorCard extends StatelessWidget {
 
 class _CustomVendorCard extends StatefulWidget {
   final bool selected;
+  final String? baseUrl;
+  final ValueChanged<String> onBaseUrlChanged;
   final void Function(String id, List<String> models) onSelect;
 
-  const _CustomVendorCard({required this.selected, required this.onSelect});
+  const _CustomVendorCard({
+    required this.selected,
+    required this.baseUrl,
+    required this.onBaseUrlChanged,
+    required this.onSelect,
+  });
 
   @override
   State<_CustomVendorCard> createState() => _CustomVendorCardState();
@@ -775,10 +799,30 @@ class _CustomVendorCardState extends State<_CustomVendorCard> {
   final _modelCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _urlCtrl.text = widget.baseUrl ?? '';
+  }
+
+  @override
+  void didUpdateWidget(_CustomVendorCard old) {
+    super.didUpdateWidget(old);
+    if (widget.baseUrl != old.baseUrl && _urlCtrl.text != widget.baseUrl) {
+      _urlCtrl.text = widget.baseUrl ?? '';
+    }
+  }
+
+  @override
   void dispose() {
     _urlCtrl.dispose();
     _modelCtrl.dispose();
     super.dispose();
+  }
+
+  void _maybeSelect() {
+    if (_urlCtrl.text.trim().isNotEmpty && _modelCtrl.text.trim().isNotEmpty) {
+      widget.onSelect('custom', [_modelCtrl.text.trim()]);
+    }
   }
 
   @override
@@ -786,11 +830,7 @@ class _CustomVendorCardState extends State<_CustomVendorCard> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: GestureDetector(
-        onTap: () {
-          if (_urlCtrl.text.isNotEmpty && _modelCtrl.text.isNotEmpty) {
-            widget.onSelect('custom', [_modelCtrl.text]);
-          }
-        },
+        onTap: _maybeSelect,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -820,7 +860,10 @@ class _CustomVendorCardState extends State<_CustomVendorCard> {
                   border: OutlineInputBorder(),
                   contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 ),
-                onChanged: (_) => setState(() {}),
+                onChanged: (v) {
+                  setState(() {});
+                  widget.onBaseUrlChanged(v.trim());
+                },
               ),
               const SizedBox(height: 6),
               TextField(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../db/database_helper.dart';
 
 class QuestionRepository {
@@ -5,6 +7,8 @@ class QuestionRepository {
     required int kpId,
     required String content,
     required String answer,
+    List<String>? options,
+    String? explanation,
     double? cplxCoef,
     double? undCoef,
     double? redCoef,
@@ -16,6 +20,8 @@ class QuestionRepository {
       'kp_id': kpId,
       'content': content,
       'answer': answer,
+      'options': options != null ? jsonEncode(options) : null,
+      'explanation': explanation,
       'cplx_coef': cplxCoef,
       'und_coef': undCoef,
       'red_coef': redCoef,
