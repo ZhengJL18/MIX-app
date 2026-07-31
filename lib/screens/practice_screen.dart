@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../widgets/question_card.dart';
 import '../widgets/answer_card.dart';
 import '../widgets/feedback_card.dart';
+import '../widgets/swipeable_stack.dart';
 import '../engine/feedback_v2.dart';
 
 /// 刷题页 — TikTok 式下滑刷题
@@ -141,10 +142,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
             children: [
               _StatusBar(questionIndex: idx),
               Expanded(
-                child: _SwipeableStack3(
+                child: SwipeableStack(
                   key: ValueKey(appState.questionIndex),
                   pages: pages,
-                  onAdvance: _onAdvance,
+                  onPageChanged: (pageIdx) {
+                    // 滑到最后一页 → 提交 + 加载下一题
+                    if (pageIdx >= pages.length - 1) {
+                      _onAdvance();
+                    }
+                  },
                 ),
               ),
             ],
@@ -196,149 +202,12 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-// ─── 3 页 TikTok 滑动容器 ───
-
-class _SwipeableStack3 extends StatefulWidget {
-  final List<Widget> pages;
-  final VoidCallback onAdvance;
-
-  const _SwipeableStack3({super.key, required this.pages, required this.onAdvance});
-
-  @override
-  State<_SwipeableStack3> createState() => _SwipeableStack3State();
-}
-
-class _SwipeableStack3State extends State<_SwipeableStack3>
-    with SingleTickerProviderStateMixin {
-  int _currentIndex = 0;
-  double _dragOffset = 0;
-  bool _isDragging = false;
-  late AnimationController _animCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    _animCtrl.addListener(() {
-      if (!_isDragging) setState(() {});
-    });
-  }
-
-  @override
-  void didUpdateWidget(_SwipeableStack3 old) {
-    super.didUpdateWidget(old);
-    // 题目切换时重置到第 0 页
-    if (widget.pages != old.pages) {
-      _currentIndex = 0;
-      _animCtrl.value = 0;
-      _dragOffset = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _animCtrl.dispose();
-    super.dispose();
-  }
-
-  bool get _canGoUp => _currentIndex > 0;
-  bool get _canGoDown => _currentIndex < widget.pages.length - 1;
-
-  void _onDragStart(DragStartDetails d) {
-    _isDragging = true;
-    _animCtrl.stop();
-    _dragOffset = _animCtrl.value * context.size!.height;
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    _dragOffset += d.delta.dy;
-    if (_dragOffset < 0 && !_canGoUp) _dragOffset *= 0.3;
-    if (_dragOffset > 0 && !_canGoDown) _dragOffset *= 0.3;
-    setState(() {});
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    _isDragging = false;
-    final h = context.size!.height;
-    final ratio = _dragOffset / h;
-
-    if (ratio.abs() > 0.35) {
-      final target = ratio < 0 ? 0.0 : 1.0;
-      _animCtrl.value = _dragOffset / h;
-      _animCtrl.animateTo(target,
-          duration: const Duration(milliseconds: 180), curve: Curves.easeOut,
-      ).then((_) {
-        if (target == 0 && _canGoUp) {
-          _currentIndex--;
-          setState(() {});
-        } else if (target == 1) {
-          if (_canGoDown) {
-            _currentIndex++;
-            // 到达最后一页 → onAdvance
-            if (_currentIndex >= widget.pages.length - 1) {
-              widget.onAdvance();
-            }
-          } else {
-            // 已经在最后页了 → 直接 advance
-            widget.onAdvance();
-          }
-        }
-        _animCtrl.value = 0;
-        _dragOffset = 0;
-        setState(() {});
-      });
-    } else {
-      _animCtrl.value = _dragOffset / h;
-      _animCtrl.animateTo(0,
-          duration: const Duration(milliseconds: 120), curve: Curves.easeOut,
-      ).then((_) {
-        _dragOffset = 0;
-        setState(() {});
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final h = context.size?.height ?? 800;
-    final currentY = _isDragging ? _dragOffset : _animCtrl.value * h;
-
-    return GestureDetector(
-      onVerticalDragStart: _onDragStart,
-      onVerticalDragUpdate: _onDragUpdate,
-      onVerticalDragEnd: _onDragEnd,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // 下一页（peeking）
-          if (_canGoDown)
-            Positioned(
-              top: h + currentY - 32,
-              left: 0,
-              right: 0,
-              height: h + 32,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: widget.pages[_currentIndex + 1],
-              ),
-            ),
-          // 当前页
-          Transform.translate(
-            offset: Offset(0, currentY),
-            child: widget.pages[_currentIndex],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─── 错误视图 ───
 
 class _ErrorView extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-  const _ErrorView({super.key, required this.message, required this.onRetry});
+  const _ErrorView({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
