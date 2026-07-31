@@ -67,7 +67,7 @@ const List<AiVendorPreset> kAiVendors = [
     id: 'deepseek',
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     keyHint: '在 platform.deepseek.com 获取 API Key',
     recommended: true,
   ),
