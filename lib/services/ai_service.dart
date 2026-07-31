@@ -25,6 +25,48 @@ abstract class AiService {
   Future<GeneratedQuestion> generateQuestion(String prompt);
 }
 
+/// 通用 OpenAI 兼容客户端 — DeepSeek / OpenAI / 智谱 / Kimi / 通义千问
+/// 全部使用 OpenAI chat completions 协议。
+class OpenAiCompatibleAiService implements AiService {
+  OpenAiCompatibleAiService({
+    required this.baseUrl,
+    required this.model,
+    required this.apiKey,
+  });
+
+  final String baseUrl;
+  final String model;
+  final String apiKey;
+
+  @override
+  Future<GeneratedQuestion> generateQuestion(String prompt) async {
+    final response = await http.post(
+      Uri.parse(baseUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({
+        'model': model,
+        'max_tokens': 2048,
+        'messages': [
+          {'role': 'user', 'content': prompt},
+        ],
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('AI 出题请求失败: ${response.statusCode} ${response.body}');
+    }
+
+    final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final text = data['choices']?[0]?['message']?['content'] as String? ?? '';
+    if (text.isEmpty) throw Exception('AI 返回为空，请检查 API Key 或模型名');
+
+    return AnthropicAiService.parseMarkdownResponse(text);
+  }
+}
+
 /// 默认实现：调用 Anthropic Messages API。
 ///
 /// 使用前需要在客户端配置里填入 API Key 与（如需要）反向代理地址，

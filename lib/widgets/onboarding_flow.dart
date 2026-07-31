@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/app_state.dart';
+import '../services/ai_service.dart';
 import '../repository/subject_repository.dart';
 import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
@@ -110,6 +113,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await prefs.setString('api_key', _apiKey ?? '');
     await prefs.setString('identity', _selectedIdentity?.name ?? '');
     await prefs.setBool('onboarding_complete', true);
+
+    // ── 让 AI 服务真正生效：用配置的真实客户端替换 MockAiService ──
+    final vendorId = _selectedVendorId;
+    final model = _selectedModel;
+    final key = _apiKey;
+    if (vendorId != null && model != null && key != null && key.isNotEmpty) {
+      final vendor = kAiVendors.where((v) => v.id == vendorId).firstOrNull;
+      final base = vendor?.baseUrl;
+      if (base != null && base.isNotEmpty) {
+        // 预设厂商 baseUrl 形如 https://api.deepseek.com/v1 → 拼 chat/completions
+        final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
+        final ai = OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key);
+        if (mounted) context.read<AppState>().configureAiService(ai);
+      }
+    }
 
     // 创建科目和知识点
     if (_selectedIdentity != null) {

@@ -96,7 +96,8 @@ class _SwipeableStackState extends State<SwipeableStack>
     final deltaY = e.position.dy - prev.dy;
     _pointerPos[e.pointer] = e.position;
     if (_twoFingerMode) {
-      setState(() => _twoFingerDy += deltaY);
+      // 两根手指各自移动都会触发 → 取均值，避免位移翻倍
+      setState(() => _twoFingerDy += deltaY / _pointerPos.length);
     }
   }
 

@@ -194,7 +194,7 @@ class _StatusBar extends StatelessWidget {
                 style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
           const Spacer(),
-          Text('第 $questionIndex 题',
+          Text('第 ${questionIndex + 1} 题',
               style: const TextStyle(color: Color(0xFF8B7355), fontSize: 13)),
         ],
       ),
