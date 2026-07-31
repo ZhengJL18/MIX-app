@@ -317,6 +317,16 @@ class AgentBridge {
         }
       }
       debugPrint('[AgentBridge] 解压完成: 成功 $okCount, 失败 $failCount');
+
+      // archive 解压不保留 tar 的执行权限位 → python 二进制补 chmod +x
+      final py = File('${filesDir.path}/python/python3.14');
+      if (await py.exists()) {
+        await py.setPermissions(
+          FilePermissions.ownerRead |
+              FilePermissions.ownerWrite |
+              FilePermissions.ownerExecute,
+        );
+      }
     } catch (e) {
       throw Exception('初始化 Hermes Agent 失败: $e');
     }
