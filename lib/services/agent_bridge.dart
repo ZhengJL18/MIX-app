@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import '../models/ai_settings.dart';
 import '../models/message_block.dart';
 
 /// Agent 桥接层 — 管理 Hermes 子进程 + HTTP/SSE 通信。
@@ -101,6 +102,10 @@ class AgentBridge {
       final pythonBin = '${filesDir}/python/python3.14';
       final pkgDir = '${filesDir}/python-packages';
       final srcDir = '${filesDir}/hermes-source';
+      final hermesHome = '$filesDir/.hermes';
+
+      // 把 App 的 AI 配置同步给 Hermes（同一份模型/provider/key）
+      await _writeHermesAiConfig();
 
       // Hermes 0.15.2 通过 gateway 暴露 OpenAI 兼容 API（/v1/chat/completions）。
       // 端口由 api_server 的 DEFAULT_PORT=8642 决定，agent_bridge 从 /health 读取。
@@ -111,6 +116,7 @@ class AgentBridge {
         environment: {
           'PYTHONPATH': '$pkgDir:$srcDir:${srcDir}/plugins/mix',
           'HOME': filesDir,
+          'HERMES_HOME': hermesHome,
           'PATH': '${filesDir}/python:/system/bin:/usr/bin:/bin',
           'TERMINAL_CWD': filesDir,
           // python3.14 依赖 Termux 的 libandroid-support.so，已打进 bundle 的 files/python/
@@ -152,6 +158,57 @@ class AgentBridge {
     _process?.kill();
     _process = null;
     _running = false;
+  }
+
+  /// 读取当前 AI 配置（设置页用）。
+  Future<AiSettings?> readAiSettings() => AiSettings.load();
+
+  /// 保存 AI 配置并同步给 Hermes。
+  ///
+  /// 配置写入 SharedPreferences 后重新生成 Hermes 的 config.yaml/.env，
+  /// 若 gateway 已在运行则重启使其生效（Hermes 启动时读一次配置）。
+  Future<void> applyAiSettings(AiSettings settings) async {
+    await settings.save();
+    try {
+      await _writeHermesAiConfig();
+    } catch (e) {
+      debugPrint('[AgentBridge] 同步 Hermes AI 配置失败: $e');
+    }
+    if (_running) {
+      await stop();
+      await start();
+    }
+  }
+
+  /// 把 App 的 AI 配置写到 Hermes home（config.yaml + .env），
+  /// 让本地 Hermes 与 App 共用同一个模型和 provider。
+  Future<void> _writeHermesAiConfig() async {
+    final filesDir = await _getFilesDir();
+    final hermesHome = Directory('$filesDir/.hermes');
+    await hermesHome.create(recursive: true);
+
+    final settings = await AiSettings.load();
+    if (settings == null || !settings.isComplete) {
+      // 未配置 AI 时清掉旧配置，避免残留上次的 provider/key
+      final cfg = File('${hermesHome.path}/config.yaml');
+      final env = File('${hermesHome.path}/.env');
+      if (await cfg.exists()) await cfg.delete();
+      if (await env.exists()) await env.delete();
+      return;
+    }
+
+    final provider = settings.hermesProvider;
+    final yaml = StringBuffer()
+      ..writeln('model:')
+      ..writeln('  provider: ${provider?.providerId ?? "openai-api"}')
+      ..writeln('  default: ${settings.model}')
+      ..writeln('  base_url: ${settings.baseUrl}');
+    await File('${hermesHome.path}/config.yaml').writeAsString(yaml.toString());
+
+    if (provider != null) {
+      await File('${hermesHome.path}/.env')
+          .writeAsString('${provider.envKey}=${settings.apiKey}\n');
+    }
   }
 
   /// 发送消息并接收事件流（SSE）。

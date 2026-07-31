@@ -10,6 +10,7 @@ import 'providers/app_state.dart';
 import 'screens/practice_screen.dart';
 import 'screens/subject_management_screen.dart';
 import 'screens/stats_screen.dart';
+import 'screens/ai_settings_screen.dart';
 import 'services/agent_bridge.dart';
 import 'services/ai_service.dart';
 import 'data/preset_data.dart';
@@ -95,6 +96,9 @@ class _MainShellState extends State<_MainShell> {
   /// Hermes Agent 桥接层 — 主界面生命周期内持有
   final AgentBridge _agent = AgentBridge();
 
+  /// AI 配置版本号 — 设置页保存后递增，通知 ChatScreen 重新加载模型
+  int _aiConfigVersion = 0;
+
   /// Hermes 解压/启动进度（null = 未在解压，100 = 就绪）
   int? _agentProgress;
   String _agentStatus = '';
@@ -153,7 +157,7 @@ class _MainShellState extends State<_MainShell> {
                   child: PageView(
                     controller: _pageController,
                     children: [
-                      _ChatScreen(agent: _agent),
+                      _ChatScreen(agent: _agent, aiConfigVersion: _aiConfigVersion),
                       const PracticeScreen(),
                       _FilesScreen(agent: _agent),
                     ],
@@ -234,6 +238,17 @@ class _MainShellState extends State<_MainShell> {
               Navigator.of(ctx).push(MaterialPageRoute(
                 builder: (_) => const StatsScreen(),
               ));
+            }),
+            _menuItem(ctx, Icons.settings, 'AI 设置', () async {
+              Navigator.of(ctx).pop();
+              final changed = await Navigator.of(ctx).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => AiSettingsScreen(agent: _agent),
+                ),
+              );
+              if (changed == true && mounted) {
+                setState(() => _aiConfigVersion++);
+              }
             }),
             const SizedBox(height: 24),
           ],
@@ -333,7 +348,10 @@ class _AgentProgressOverlay extends StatelessWidget {
 /// AI 对话页 — 优先用配置的外部 AI，Hermes 本地 Agent 作为补充状态显示
 class _ChatScreen extends StatefulWidget {
   final AgentBridge agent;
-  const _ChatScreen({required this.agent});
+
+  /// AI 配置版本号 — 设置页保存后递增，触发本页重新加载模型
+  final int aiConfigVersion;
+  const _ChatScreen({required this.agent, this.aiConfigVersion = 0});
 
   @override
   State<_ChatScreen> createState() => _ChatScreenState();
@@ -351,6 +369,15 @@ class _ChatScreenState extends State<_ChatScreen> {
   void initState() {
     super.initState();
     _loadAi();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 设置页保存了新配置 → 重新加载 AI 服务
+    if (oldWidget.aiConfigVersion != widget.aiConfigVersion) {
+      _loadAi();
+    }
   }
 
   Future<void> _loadAi() async {
