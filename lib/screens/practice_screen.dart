@@ -91,7 +91,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
     return Consumer<AppState>(
       builder: (context, appState, _) {
         final q = appState.currentQuestion;
-        final idx = appState.questionIndex;
 
         // 加载中
         if (appState.loadingNext && q == null) {
@@ -116,7 +115,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         // 三页构建
         final pages = <Widget>[
           // Page 0 — 题目
-          QuestionCard(question: q, questionIndex: idx),
+          QuestionCard(question: q),
 
           // Page 1 — 答案 + ✅❌
           AnswerCard(question: q, onCorrect: _onCorrect, onWrong: _onWrong),
@@ -140,7 +139,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
           color: AppColors.lightBg,
           child: Column(
             children: [
-              _StatusBar(questionIndex: idx),
+              const _StatusBar(),
               Expanded(
                 child: SwipeableStack(
                   key: ValueKey(appState.questionIndex),
@@ -174,8 +173,7 @@ class _AutoAdvancePage extends StatelessWidget {
 // ─── 顶部状态栏 ───
 
 class _StatusBar extends StatelessWidget {
-  final int questionIndex;
-  const _StatusBar({required this.questionIndex});
+  const _StatusBar();
 
   @override
   Widget build(BuildContext context) {
@@ -193,9 +191,6 @@ class _StatusBar extends StatelessWidget {
             child: const Text('刷题模式',
                 style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
-          const Spacer(),
-          Text('第 ${questionIndex + 1} 题',
-              style: const TextStyle(color: Color(0xFF8B7355), fontSize: 13)),
         ],
       ),
     );

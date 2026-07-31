@@ -5,12 +5,10 @@ import '../theme/app_colors.dart';
 /// 多题型支持：根据 type 字段渲染不同交互组件
 class QuestionCard extends StatelessWidget {
   final Map<String, dynamic> question;
-  final int questionIndex;
 
   const QuestionCard({
     super.key,
     required this.question,
-    this.questionIndex = 0,
   });
 
   @override
@@ -24,7 +22,7 @@ class QuestionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 顶部信息
+          // 顶部信息：只显示题型标签，不显示题号
           Row(
             children: [
               Container(
@@ -34,14 +32,9 @@ class QuestionCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '第 ${questionIndex + 1} 题',
+                  _typeLabel(type),
                   style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _typeLabel(type),
-                style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
               ),
             ],
           ),
