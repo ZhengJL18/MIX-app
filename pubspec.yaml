@@ -53,6 +53,9 @@ dependencies:
   # 冷启动持久化
   shared_preferences: ^2.3.0
 
+  # Hermes bundle 解压（绕开 Android SELinux 对 tar 的限制）
+  archive: ^3.6.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

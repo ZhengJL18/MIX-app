@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/message_block.dart';
@@ -64,7 +65,7 @@ class AgentBridge {
     try {
       final pythonBin = '${filesDir}/python/python3.14';
       final pkgDir = '${filesDir}/python-packages';
-      final srcDir = '${filesDir}/hermes';
+      final srcDir = '${filesDir}/hermes-source';
 
       _process = await Process.start(
         pythonBin,
@@ -73,12 +74,16 @@ class AgentBridge {
         environment: {
           'PYTHONPATH': '$pkgDir:$srcDir:${srcDir}/plugins/mix',
           'HOME': filesDir,
-          'PATH': '${filesDir}/python:/usr/bin:/bin',
+          'PATH': '${filesDir}/python:/system/bin:/usr/bin:/bin',
         },
       );
 
-      // 监听 stderr（日志用，不处理）
-      _process!.stderr.transform(utf8.decoder).listen((_) {});
+      // 监听 stderr（打印到 logcat 便于诊断）
+      _process!.stderr.transform(utf8.decoder).listen((line) {
+        if (line.trim().isNotEmpty) {
+          debugPrint('[Hermes] $line');
+        }
+      });
 
       // 等待就绪
       await _waitForHealth(timeout: const Duration(seconds: 10));
@@ -277,24 +282,36 @@ class AgentBridge {
   }
 
   Future<void> _extractAssets(Directory filesDir) async {
-    // 从 APK assets 解压 mix-agent-bundle.tar.gz
+    // 从 APK assets 解压 mix-agent-bundle.tar.gz。
+    // 用 Dart archive 包（纯 Dart）绕开 Android SELinux 对 tar 命令的限制，
+    // 并剥离 bundle 内部的 files/ 前缀（打包时带了 files/ 顶层目录）。
     try {
       await filesDir.create(recursive: true);
       final bundleData = await rootBundle.load('assets/mix-agent-bundle.tar.gz');
-      final tempFile = File('${filesDir.path}/bundle.tar.gz');
-      await tempFile.writeAsBytes(bundleData.buffer.asUint8List());
-      await _runProcess('tar', ['xzf', tempFile.path, '-C', filesDir.path]);
-      await tempFile.delete();
+      final archive = await _readTarGz(bundleData);
+
+      for (final entry in archive) {
+        if (entry.isFile) {
+          // 剥离 files/ 前缀 → 落在 filesDir 根
+          var path = entry.name;
+          if (path.startsWith('files/')) path = path.substring('files/'.length);
+          if (path.isEmpty) continue;
+
+          final out = File('${filesDir.path}/$path');
+          await out.create(recursive: true);
+          await out.writeAsBytes(entry.content as List<int>, flush: true);
+        }
+      }
     } catch (e) {
       throw Exception('初始化 Hermes Agent 失败: $e');
     }
   }
 
-  Future<void> _runProcess(String cmd, List<String> args) async {
-    final result = await Process.run(cmd, args);
-    if (result.exitCode != 0) {
-      throw Exception('$cmd 失败: ${result.stderr}');
-    }
+  Future<List<ArchiveFile>> _readTarGz(ByteData data) async {
+    final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    final decompressed = GZipDecoder().decodeBytes(bytes);
+    final tar = TarDecoder().decodeBytes(decompressed, verify: false);
+    return tar.files;
   }
 }
 
