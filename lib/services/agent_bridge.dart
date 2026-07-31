@@ -57,7 +57,13 @@ class AgentBridge {
   Future<void> start() async {
     if (_running) return;
 
-    await ensureInitialized();
+    try {
+      await ensureInitialized();
+    } catch (e) {
+      debugPrint('[AgentBridge] ensureInitialized 失败: $e');
+      _controller.add(AgentBridgeError('初始化失败', 'Hermes 环境解压失败: $e'));
+      return;
+    }
 
     final filesDir = await _getFilesDir();
     _port = await _findFreePort();
@@ -285,23 +291,32 @@ class AgentBridge {
     // 从 APK assets 解压 mix-agent-bundle.tar.gz。
     // 用 Dart archive 包（纯 Dart）绕开 Android SELinux 对 tar 命令的限制，
     // 并剥离 bundle 内部的 files/ 前缀（打包时带了 files/ 顶层目录）。
+    // 逐文件容错：单个文件失败跳过，不中断整体解压。
     try {
       await filesDir.create(recursive: true);
       final bundleData = await rootBundle.load('assets/mix-agent-bundle.tar.gz');
       final archive = await _readTarGz(bundleData);
 
+      var okCount = 0;
+      var failCount = 0;
       for (final entry in archive) {
-        if (entry.isFile) {
-          // 剥离 files/ 前缀 → 落在 filesDir 根
-          var path = entry.name;
-          if (path.startsWith('files/')) path = path.substring('files/'.length);
-          if (path.isEmpty) continue;
+        if (!entry.isFile) continue;
+        // 剥离 files/ 前缀 → 落在 filesDir 根
+        var path = entry.name;
+        if (path.startsWith('files/')) path = path.substring('files/'.length);
+        if (path.isEmpty) continue;
 
+        try {
           final out = File('${filesDir.path}/$path');
           await out.create(recursive: true);
           await out.writeAsBytes(entry.content as List<int>, flush: true);
+          okCount++;
+        } catch (e) {
+          failCount++;
+          debugPrint('[AgentBridge] 解压失败 ${entry.name}: $e');
         }
       }
+      debugPrint('[AgentBridge] 解压完成: 成功 $okCount, 失败 $failCount');
     } catch (e) {
       throw Exception('初始化 Hermes Agent 失败: $e');
     }
