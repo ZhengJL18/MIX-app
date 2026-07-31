@@ -25,13 +25,19 @@ class AgentBridge {
   bool _initialized = false;
 
   /// Hermes api_server 的 Bearer 认证 key（API_SERVER_KEY）。
-  /// 无 key 时 api_server 拒绝启动；MIX 用固定内部 key 与本地 Hermes 通信。
-  static const String _apiServerKey = 'mix-local-agent';
+  /// 无 key 时 api_server 拒绝启动；Hermes 0.15.2 要求长度 >= 16 字符，
+  /// 否则 api_server 视作弱密钥拒绝启动（见 api_server.py）。
+  /// MIX 用固定内部 key 与本地 Hermes 通信。
+  static const String _apiServerKey = 'mix-local-agent-2026';
 
   // ── 初始化状态 ──
   bool get isRunning => _running;
   bool get isInitialized => _initialized;
   int get port => _port;
+
+  /// 当前 bundle 的版本标记。bundle 内容更新时递增，
+  /// 与 marker 文件比对不一致会强制重新解压，避免旧依赖残留。
+  static const String _bundleVersion = '2026-07-31-android-deps-v1';
 
   /// 确保环境已解压（首次启动时调用）
   ///
@@ -45,17 +51,27 @@ class AgentBridge {
     final filesDir = Directory(await _getFilesDir());
     final marker = File('${filesDir.path}/.initialized');
 
-    // 检查是否已解压
-    if (await marker.exists()) {
+    // 已解压且版本一致则直接返回
+    if (await marker.exists() && await marker.readAsString() == _bundleVersion) {
       _initialized = true;
       return;
     }
 
-    // 解压 bundle（首次启动）
+    // bundle 版本变更或首次启动 → 清掉旧的第三方包，避免残留坏依赖
+    final stalePkgs = Directory('${filesDir.path}/python-packages');
+    if (await stalePkgs.exists()) {
+      try {
+        await stalePkgs.delete(recursive: true);
+      } catch (e) {
+        debugPrint('[AgentBridge] 清理旧 python-packages 失败: $e');
+      }
+    }
+
+    // 解压 bundle
     try {
       onProgress?.call(0, '正在解压学习环境...');
       await _extractAssets(filesDir, onProgress: onProgress);
-      await marker.writeAsString('ok');
+      await marker.writeAsString(_bundleVersion);
       _initialized = true;
     } catch (e) {
       debugPrint('[AgentBridge] ensureInitialized 失败: $e');
