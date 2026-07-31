@@ -26,96 +26,108 @@ class AnswerCard extends StatelessWidget {
 
     return Container(
       color: AppColors.lightBg,
-      padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 参考答案
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 18),
-                    const SizedBox(width: 6),
-                    Text('参考答案', style: TextStyle(
-                      color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15,
+          // 内容区：可滚动，滚到底后下滑自然翻页（嵌套滚动）
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 参考答案
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 18),
+                            const SizedBox(width: 6),
+                            Text('参考答案', style: TextStyle(
+                              color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15,
+                            )),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(answer, style: t.bodyLarge?.copyWith(height: 1.6)),
+                      ],
+                    ),
+                  ),
+                  // 解析
+                  if (explanation.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text('解析', style: t.titleMedium?.copyWith(fontSize: 15)),
+                    const SizedBox(height: 6),
+                    Text(explanation, style: TextStyle(
+                      color: AppColors.lightTextMuted, height: 1.5, fontSize: 14,
                     )),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Text(answer, style: t.bodyLarge?.copyWith(height: 1.6)),
-              ],
+                  // 四维系数
+                  if (cplx != null || und != null || red != null || cov != null) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _CoefChip('复杂度', cplx, AppColors.primary),
+                        const SizedBox(width: 6),
+                        _CoefChip('理解', und, AppColors.secondary),
+                        const SizedBox(width: 6),
+                        _CoefChip('冗余', red, AppColors.accent),
+                        const SizedBox(width: 6),
+                        _CoefChip('覆盖', cov, AppColors.lightTextMuted),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
-          // 解析
-          if (explanation.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text('解析', style: t.titleMedium?.copyWith(fontSize: 15)),
-            const SizedBox(height: 6),
-            Text(explanation, style: TextStyle(
-              color: AppColors.lightTextMuted, height: 1.5, fontSize: 14,
-            )),
-          ],
-          // 四维系数
-          if (cplx != null || und != null || red != null || cov != null) ...[
-            const SizedBox(height: 12),
-            Row(
+          // 底部固定按钮区
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+            child: Row(
               children: [
-                _CoefChip('复杂度', cplx, AppColors.primary),
-                const SizedBox(width: 6),
-                _CoefChip('理解', und, AppColors.secondary),
-                const SizedBox(width: 6),
-                _CoefChip('冗余', red, AppColors.accent),
-                const SizedBox(width: 6),
-                _CoefChip('覆盖', cov, AppColors.lightTextMuted),
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: onCorrect,
+                      icon: const Icon(Icons.check, size: 20),
+                      label: const Text('答对了', style: TextStyle(fontSize: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.correct,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: onWrong,
+                      icon: const Icon(Icons.close, size: 20),
+                      label: const Text('答错了', style: TextStyle(fontSize: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.wrong,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
-          ],
-          const Spacer(),
-          // 对错按钮
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: onCorrect,
-                    icon: const Icon(Icons.check, size: 20),
-                    label: const Text('答对了', style: TextStyle(fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.correct,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: onWrong,
-                    icon: const Icon(Icons.close, size: 20),
-                    label: const Text('答错了', style: TextStyle(fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.wrong,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
