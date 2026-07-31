@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
+import 'theme/app_colors.dart';
 import 'providers/app_state.dart';
 import 'screens/practice_screen.dart';
+import 'screens/subject_management_screen.dart';
+import 'screens/stats_screen.dart';
 import 'services/agent_bridge.dart';
 import 'services/ai_service.dart';
 import 'data/preset_data.dart';
@@ -141,16 +144,20 @@ class _MainShellState extends State<_MainShell> {
       color: AppTheme.light.cardTheme.color,
       child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_awesome, color: Color(0xFFFF6B35), size: 22),
-              const SizedBox(width: 8),
-              Text('Mix',
-                  style: TextStyle(
-                      color: const Color(0xFF2D1810),
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold)),
-            ],
+          // 左上角 Logo = 二级菜单入口
+          GestureDetector(
+            onTap: _openMenu,
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome, color: Color(0xFFFF6B35), size: 22),
+                const SizedBox(width: 8),
+                Text('Mix',
+                    style: TextStyle(
+                        color: const Color(0xFF2D1810),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
           ),
           const Spacer(),
           _tabButton('AI', 0, isActive),
@@ -158,6 +165,55 @@ class _MainShellState extends State<_MainShell> {
           _tabButton('文件', 2, isActive),
         ],
       ),
+    );
+  }
+
+  /// 二级菜单：点左上角 Logo 弹出
+  void _openMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.lightSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.lightDivider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _menuItem(ctx, Icons.menu_book, '科目管理', () {
+              Navigator.of(ctx).pop();
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const SubjectManagementScreen(),
+              ));
+            }),
+            _menuItem(ctx, Icons.insights, '学习统计', () {
+              Navigator.of(ctx).pop();
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const StatsScreen(),
+              ));
+            }),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _menuItem(BuildContext ctx, IconData icon, String label, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFFFF6B35)),
+      title: Text(label),
+      onTap: onTap,
     );
   }
 
