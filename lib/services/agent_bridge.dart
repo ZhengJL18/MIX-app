@@ -24,6 +24,10 @@ class AgentBridge {
   bool _running = false;
   bool _initialized = false;
 
+  /// Hermes api_server 的 Bearer 认证 key（API_SERVER_KEY）。
+  /// 无 key 时 api_server 拒绝启动；MIX 用固定内部 key 与本地 Hermes 通信。
+  static const String _apiServerKey = 'mix-local-agent';
+
   // ── 初始化状态 ──
   bool get isRunning => _running;
   bool get isInitialized => _initialized;
@@ -66,21 +70,27 @@ class AgentBridge {
     }
 
     final filesDir = await _getFilesDir();
-    _port = await _findFreePort();
+    // Hermes gateway api_server 固定端口 8642（见 api_server.py DEFAULT_PORT）
+    _port = 8642;
 
     try {
       final pythonBin = '${filesDir}/python/python3.14';
       final pkgDir = '${filesDir}/python-packages';
       final srcDir = '${filesDir}/hermes-source';
 
+      // Hermes 0.15.2 通过 gateway 暴露 OpenAI 兼容 API（/v1/chat/completions）。
+      // 端口由 api_server 的 DEFAULT_PORT=8642 决定，agent_bridge 从 /health 读取。
       _process = await Process.start(
         pythonBin,
-        ['-m', 'hermes', 'serve', '--port', '$_port', '--config', '${filesDir}/config.yaml'],
+        ['-m', 'hermes_cli.main', 'gateway', 'run'],
         workingDirectory: srcDir,
         environment: {
           'PYTHONPATH': '$pkgDir:$srcDir:${srcDir}/plugins/mix',
           'HOME': filesDir,
           'PATH': '${filesDir}/python:/system/bin:/usr/bin:/bin',
+          'TERMINAL_CWD': filesDir,
+          // api_server 无 API_SERVER_KEY 拒绝启动，必须设置
+          'API_SERVER_KEY': _apiServerKey,
         },
       );
 
@@ -150,6 +160,7 @@ class AgentBridge {
       final client = HttpClient();
       final request = await client.postUrl(Uri.parse('http://127.0.0.1:$_port/v1/chat/completions'));
       request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_apiServerKey');
       request.write(body);
 
       final response = await request.close();
@@ -265,15 +276,7 @@ class AgentBridge {
     return '/data/data/com.mix.mix_app/files';
   }
 
-  Future<int> _findFreePort() async {
-    // 找随机空闲端口
-    final server = await ServerSocket.bind('127.0.0.1', 0);
-    final port = server.port;
-    await server.close();
-    return port;
-  }
-
-  Future<void> _waitForHealth({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<void> _waitForHealth({Duration timeout = const Duration(seconds: 60)}) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       try {
