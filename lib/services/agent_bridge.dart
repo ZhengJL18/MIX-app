@@ -321,11 +321,7 @@ class AgentBridge {
       // archive 解压不保留 tar 的执行权限位 → python 二进制补 chmod +x
       final py = File('${filesDir.path}/python/python3.14');
       if (await py.exists()) {
-        await py.setPermissions(
-          FilePermissions.ownerRead |
-              FilePermissions.ownerWrite |
-              FilePermissions.ownerExecute,
-        );
+        await Process.run('chmod', ['+x', py.path]);
       }
     } catch (e) {
       throw Exception('初始化 Hermes Agent 失败: $e');
