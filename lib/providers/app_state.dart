@@ -102,11 +102,28 @@ class AppState extends ChangeNotifier {
       _currentQuestion = question;
       _questionIndex += 1;
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _friendlyError(e);
     } finally {
       _loadingNext = false;
       notifyListeners();
     }
+  }
+
+  /// 把异常转成用户能看懂的错误提示。
+  static String _friendlyError(Object e) {
+    final s = e.toString();
+    if (s.contains('科目') || s.contains('知识点')) {
+      return '还没有可用的科目/知识点，请先在「科目管理」创建';
+    }
+    if (s.contains('SocketException') || s.contains('Connection refused')) {
+      return '网络连接失败，请检查网络后重试';
+    }
+    if (s.contains('401') || s.contains('403') || s.contains('API Key') || s.contains('api_key')) {
+      return 'AI 接口认证失败，请检查「AI 设置」中的 API Key';
+    }
+    if (s.contains('429')) return 'AI 请求过于频繁，请稍后再试';
+    if (s.contains('timeout') || s.contains('Timed out')) return 'AI 响应超时，请重试';
+    return '出题失败：$s';
   }
 
   /// 提交作答结果：写 practice_records + 按 3.4 公式更新 kp_user_state。

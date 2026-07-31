@@ -293,6 +293,7 @@ class MockAiService implements AiService {
     await Future.delayed(const Duration(milliseconds: 300));
     return GeneratedQuestion(
       content: '（示例题目，尚未配置 AI 接口，请先在设置中配置）\n\n$prompt',
+      answer: _mockOptions.first,
       options: _mockOptions,
       correctAnswer: _mockOptions.first,
       explanation: '这是占位示例题目。配置真实的 AI 接口后，会为你生成对应知识点的单选题。',
@@ -315,6 +316,7 @@ class MockAiService implements AiService {
     }
     return GeneratedQuestion(
       content: text,
+      answer: _mockOptions.first,
       options: _mockOptions,
       correctAnswer: _mockOptions.first,
       explanation: '这是占位示例题目。配置真实的 AI 接口后，会为你生成对应知识点的单选题。',

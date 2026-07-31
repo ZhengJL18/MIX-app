@@ -24,6 +24,8 @@ class AgentBridge {
   int _port = 0;
   bool _running = false;
   bool _initialized = false;
+  bool _failed = false;
+  bool _starting = false; // 防重入：解压/启动过程中多次 start() 只执行一次
 
   /// Hermes api_server 的 Bearer 认证 key（API_SERVER_KEY）。
   /// 无 key 时 api_server 拒绝启动；Hermes 0.15.2 要求长度 >= 16 字符，
@@ -34,6 +36,7 @@ class AgentBridge {
   // ── 初始化状态 ──
   bool get isRunning => _running;
   bool get isInitialized => _initialized;
+  bool get hasFailed => _failed;
   int get port => _port;
 
   /// 当前 bundle 的版本标记。bundle 内容更新时递增，
@@ -82,14 +85,18 @@ class AgentBridge {
 
   /// 启动 Hermes 子进程。
   Future<void> start() async {
-    if (_running) return;
+    if (_running || _starting) return;
+    _starting = true;
+    _failed = false;
 
     try {
       await ensureInitialized(onProgress: (percent, status) {
         _controller.add(AgentBridgeProgress(percent, status));
       });
     } catch (e) {
+      _starting = false;
       debugPrint('[AgentBridge] ensureInitialized 失败: $e');
+      _failed = true;
       _controller.add(AgentBridgeError('初始化失败', 'Hermes 环境解压失败: $e'));
       return;
     }
@@ -136,6 +143,7 @@ class AgentBridge {
       // 等待就绪
       await _waitForHealth(timeout: const Duration(seconds: 10));
       _running = true;
+      _failed = false;
 
       // 进程退出时清理状态
       _process!.exitCode.then((_) {
@@ -146,10 +154,13 @@ class AgentBridge {
       _controller.add(AgentBridgeStatus('agent_ready', 'Hermes 已就绪'));
     } catch (e) {
       _running = false;
+      _failed = true;
       _process?.kill();
       _process = null;
       debugPrint('[AgentBridge] start 失败: $e');
       _controller.add(AgentBridgeError('启动失败', 'Hermes Agent 启动失败: $e'));
+    } finally {
+      _starting = false;
     }
   }
 

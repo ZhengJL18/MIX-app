@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -12,6 +13,7 @@ import 'screens/practice_screen.dart';
 import 'screens/subject_management_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/ai_settings_screen.dart';
+import 'screens/wrong_questions_screen.dart';
 import 'services/agent_bridge.dart';
 import 'services/ai_service.dart';
 import 'models/message_block.dart';
@@ -53,10 +55,16 @@ class AppEntry extends StatefulWidget {
 class _AppEntryState extends State<AppEntry> {
   bool? _onboardingComplete;
 
+  /// Hermes Agent 桥接层 — App 入口持有，onboarding 期间即后台解压预热
+  final AgentBridge _agent = AgentBridge();
+
   @override
   void initState() {
     super.initState();
     _checkOnboarding();
+    // 首次启动就提前拉起 Hermes（后台解压/启动），
+    // 避免用户完成引导后才开始等 80MB 解压
+    _agent.start();
   }
 
   Future<void> _checkOnboarding() async {
@@ -75,7 +83,7 @@ class _AppEntryState extends State<AppEntry> {
       );
     }
     if (_onboardingComplete == true) {
-      return const _MainShell();
+      return _MainShell(agent: _agent);
     }
     return OnboardingFlow(onComplete: () {
       setState(() => _onboardingComplete = true);
@@ -85,7 +93,8 @@ class _AppEntryState extends State<AppEntry> {
 
 /// 主界面框架
 class _MainShell extends StatefulWidget {
-  const _MainShell();
+  final AgentBridge agent;
+  const _MainShell({required this.agent});
 
   @override
   State<_MainShell> createState() => _MainShellState();
@@ -95,8 +104,8 @@ class _MainShellState extends State<_MainShell> {
   final PageController _pageController = PageController(initialPage: 1);
   int _currentPage = 1;
 
-  /// Hermes Agent 桥接层 — 主界面生命周期内持有
-  final AgentBridge _agent = AgentBridge();
+  /// Hermes Agent 桥接层 — 由 App 入口传入（onboarding 期间已预热）
+  late final AgentBridge _agent = widget.agent;
 
   /// AI 配置版本号 — 设置页保存后递增，通知 ChatScreen 重新加载模型
   int _aiConfigVersion = 0;
@@ -140,7 +149,7 @@ class _MainShellState extends State<_MainShell> {
   @override
   void dispose() {
     _agentSub?.cancel();
-    _agent.dispose();
+    // agent 由 App 入口持有，此处只解绑订阅，不 dispose
     _pageController.dispose();
     super.dispose();
   }
@@ -199,12 +208,33 @@ class _MainShellState extends State<_MainShell> {
             ),
           ),
           const Spacer(),
-          _tabButton('AI', 0, isActive),
-          _tabButton('刷题', 1, isActive),
-          _tabButton('文件', 2, isActive),
+          _tabButton('AI', 0, isActive, Icons.chat_bubble_outline),
+          _tabButton('刷题', 1, isActive, Icons.edit_note),
+          _tabButton('文件', 2, isActive, Icons.folder_outlined),
+          // 显眼的设置入口（也可从左上角 Logo 菜单进入）
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _openAiSettings,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(Icons.settings_outlined,
+                  color: _currentPage == 3 ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
+                  size: 20),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// 打开 AI 设置页（设置保存后通知 ChatScreen 刷新）
+  Future<void> _openAiSettings() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AiSettingsScreen(agent: _agent)),
+    );
+    if (changed == true && mounted) {
+      setState(() => _aiConfigVersion++);
+    }
   }
 
   /// 二级菜单：点左上角 Logo 弹出
@@ -241,16 +271,15 @@ class _MainShellState extends State<_MainShell> {
                 builder: (_) => const StatsScreen(),
               ));
             }),
-            _menuItem(ctx, Icons.settings, 'AI 设置', () async {
+            _menuItem(ctx, Icons.replay_circle_filled_outlined, '错题回顾', () {
               Navigator.of(ctx).pop();
-              final changed = await Navigator.of(ctx).push<bool>(
-                MaterialPageRoute(
-                  builder: (_) => AiSettingsScreen(agent: _agent),
-                ),
-              );
-              if (changed == true && mounted) {
-                setState(() => _aiConfigVersion++);
-              }
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const WrongQuestionsScreen(),
+              ));
+            }),
+            _menuItem(ctx, Icons.settings, 'AI 设置', () {
+              Navigator.of(ctx).pop();
+              _openAiSettings();
             }),
             const SizedBox(height: 24),
           ],
@@ -267,24 +296,31 @@ class _MainShellState extends State<_MainShell> {
     );
   }
 
-  Widget _tabButton(String label, int page, bool Function(int) isActive) {
+  Widget _tabButton(String label, int page, bool Function(int) isActive, IconData icon) {
     final active = isActive(page);
     return GestureDetector(
       onTap: () => _pageController.animateToPage(page,
           duration: const Duration(milliseconds: 300), curve: Curves.easeOut),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: active
               ? const Color(0xFFFF6B35).withValues(alpha: 0.15)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(label,
-            style: TextStyle(
-                color: active ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
-                fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: active ? const Color(0xFFFF6B35) : const Color(0xFF8B7355)),
+            const SizedBox(width: 4),
+            Text(label,
+                style: TextStyle(
+                    color: active ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
+                    fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
+          ],
+        ),
       ),
     );
   }
@@ -366,12 +402,23 @@ class _ChatScreenState extends State<_ChatScreen> {
   final Set<String> _userMsgIds = {};
   bool _sending = false;
 
+  StreamSubscription? _agentSub;
+  StreamSubscription<MessageBlock>? _streamSub;
+
   OpenAiCompatibleAiService? _ai;
+
+  static const String _historyKey = 'chat_history_blocks';
+  static const String _historyUserIdsKey = 'chat_history_user_ids';
 
   @override
   void initState() {
     super.initState();
     _loadAi();
+    _loadHistory();
+    // 订阅 Hermes 事件，状态变化（失败/就绪）时刷新顶部状态条
+    _agentSub = widget.agent.events.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -399,9 +446,60 @@ class _ChatScreenState extends State<_ChatScreen> {
 
   @override
   void dispose() {
+    _agentSub?.cancel();
+    _streamSub?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// 对话历史持久化到 SharedPreferences（切 tab / 重进不丢失）
+  void _persistHistory() {
+    final prefsFuture = SharedPreferences.getInstance();
+    prefsFuture.then((prefs) {
+      prefs.setString(_historyKey, jsonEncode(_messages.map((m) => m.toMap()).toList()));
+      prefs.setStringList(_historyUserIdsKey, _userMsgIds.toList());
+    });
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_historyKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      final blocks = list
+          .map((e) => MessageBlock.fromMap((e as Map).cast<String, dynamic>()))
+          .whereType<MessageBlock>()
+          .toList();
+      if (blocks.isEmpty) return;
+      final userIds = prefs.getStringList(_historyUserIdsKey) ?? [];
+      if (!mounted) return;
+      setState(() {
+        _messages.addAll(blocks);
+        _userMsgIds.addAll(userIds);
+      });
+      _scrollToBottom();
+    } catch (_) {}
+  }
+
+  /// 停止当前流式回复
+  void _stopStreaming() {
+    _streamSub?.cancel();
+    _streamSub = null;
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      _messages.add(TextBlock(id: generateBlockId(), content: '（已停止生成）'));
+    });
+    _persistHistory();
+  }
+
+  void _onStreamDone() {
+    if (!mounted) return;
+    setState(() => _sending = false);
+    _persistHistory();
+    _scrollToBottom();
   }
 
   Future<void> _send() async {
@@ -416,46 +514,70 @@ class _ChatScreenState extends State<_ChatScreen> {
       _messages.add(um);
       _sending = true;
     });
+    _persistHistory();
     _scrollToBottom();
-    try {
-      if (hermesUp) {
-        // 本地 Hermes Agent（与 App 共用同一模型）
-        final history = _messages
-            .whereType<TextBlock>()
-            .toList()
-            .reversed
-            .skip(1) // 跳过刚加入的当前用户消息，send() 内部会用 newMessage 追加
-            .toList()
-            .reversed
-            .map((b) => {
-                  'role': _userMsgIds.contains(b.id) ? 'user' : 'assistant',
-                  'content': b.content,
-                })
-            .toList();
-        await for (final block
-            in widget.agent.send(messages: history, newMessage: text)) {
-          if (!mounted) return;
-          setState(() => _upsertBlock(block));
-          _scrollToBottom();
-        }
-      } else {
-        // Hermes 未就绪时回退外部 AI
+
+    if (!hermesUp) {
+      // Hermes 未就绪时回退外部 AI
+      try {
         final reply = await _ai!.chat(text);
         if (!mounted) return;
         setState(() {
           _messages.add(TextBlock(id: generateBlockId(), content: reply));
           _sending = false;
         });
+        _persistHistory();
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _messages.add(TextBlock(id: generateBlockId(), content: '⚠️ $e', isError: true));
+          _sending = false;
+        });
+        _persistHistory();
       }
+      _scrollToBottom();
+      return;
+    }
+
+    // 本地 Hermes Agent（与 App 共用同一模型）
+    final history = _messages
+        .whereType<TextBlock>()
+        .toList()
+        .reversed
+        .skip(1) // 跳过刚加入的当前用户消息，send() 内部会用 newMessage 追加
+        .toList()
+        .reversed
+        .map((b) => {
+              'role': _userMsgIds.contains(b.id) ? 'user' : 'assistant',
+              'content': b.content,
+            })
+        .toList();
+
+    try {
+      _streamSub = widget.agent.send(messages: history, newMessage: text).listen(
+        (block) {
+          if (!mounted) return;
+          setState(() => _upsertBlock(block));
+          _scrollToBottom();
+        },
+        onDone: _onStreamDone,
+        onError: (Object e) {
+          if (!mounted) return;
+          setState(() {
+            _messages.add(TextBlock(id: generateBlockId(), content: '⚠️ $e', isError: true));
+            _sending = false;
+          });
+          _persistHistory();
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _messages.add(TextBlock(id: generateBlockId(), content: '⚠️ $e', isError: true));
         _sending = false;
       });
+      _persistHistory();
     }
-    if (mounted) setState(() => _sending = false);
-    _scrollToBottom();
   }
 
   /// 按 id 插入或更新流式消息块（Hermes 会对同一块多次 yield 累积内容）。
@@ -559,16 +681,37 @@ class _ChatScreenState extends State<_ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(
               children: [
-                Icon(Icons.bolt, size: 14, color: widget.agent.isRunning ? const Color(0xFF4ECDC4) : const Color(0xFFA09080)),
+                Icon(Icons.bolt,
+                    size: 14,
+                    color: widget.agent.isRunning
+                        ? const Color(0xFF4ECDC4)
+                        : widget.agent.hasFailed
+                            ? const Color(0xFFFF6B6B)
+                            : const Color(0xFFA09080)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     widget.agent.isRunning
                         ? 'Hermes 本地已就绪'
-                        : '云端 AI 对话（本地 Hermes 尚未就绪）',
+                        : widget.agent.hasFailed
+                            ? 'Hermes 启动失败'
+                            : '云端 AI 对话（本地 Hermes 尚未就绪）',
                     style: const TextStyle(color: Color(0xFFA09080), fontSize: 12),
                   ),
                 ),
+                if (widget.agent.hasFailed)
+                  GestureDetector(
+                    onTap: () => widget.agent.start(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B6B).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('重试',
+                          style: TextStyle(color: Color(0xFFC0392B), fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -621,20 +764,21 @@ class _ChatScreenState extends State<_ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: (widget.agent.isRunning || _ai != null) ? _send : null,
+                  onTap: _sending
+                      ? _stopStreaming
+                      : ((widget.agent.isRunning || _ai != null) ? _send : null),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: (widget.agent.isRunning || _ai != null)
-                          ? const Color(0xFFFF6B35)
-                          : const Color(0xFFE0D5C7),
+                      color: _sending
+                          ? const Color(0xFF8B7355)
+                          : (widget.agent.isRunning || _ai != null)
+                              ? const Color(0xFFFF6B35)
+                              : const Color(0xFFE0D5C7),
                       shape: BoxShape.circle,
                     ),
                     child: _sending
-                        ? const SizedBox(
-                            width: 20, height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
+                        ? const Icon(Icons.stop, size: 18, color: Colors.white)
                         : const Icon(Icons.send, size: 18, color: Colors.white),
                   ),
                 ),
@@ -738,34 +882,134 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
   }
 }
 
-/// 文件管理页 — 显示 Hermes 运行状态 + bundle 信息
-class _FilesScreen extends StatelessWidget {
+/// 文件管理页 — 显示 Hermes 本地引擎运行状态、AI 配置状态与数据说明
+class _FilesScreen extends StatefulWidget {
   final AgentBridge agent;
   const _FilesScreen({required this.agent});
 
   @override
+  State<_FilesScreen> createState() => _FilesScreenState();
+}
+
+class _FilesScreenState extends State<_FilesScreen> {
+  StreamSubscription? _agentSub;
+  bool _aiConfigured = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _agentSub = widget.agent.events.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _checkAi();
+  }
+
+  @override
+  void dispose() {
+    _agentSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkAi() async {
+    final settings = await widget.agent.readAiSettings();
+    if (!mounted) return;
+    setState(() => _aiConfigured = settings != null);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final agent = widget.agent;
     return Container(
       color: const Color(0xFFFFF8F0),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.folder_outlined,
-                color: agent.isInitialized ? const Color(0xFFFFB347) : const Color(0xFF8B7355),
-                size: 64),
-            const SizedBox(height: 16),
-            Text('文件管理',
-                style: const TextStyle(color: Color(0xFF8B7355), fontSize: 18)),
-            const SizedBox(height: 8),
-            Text(
-              agent.isInitialized
-                  ? 'Hermes 环境已初始化'
-                  : '管理学习资料和笔记',
-              style: const TextStyle(color: Color(0xFFA09080), fontSize: 14),
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _InfoCard(
+            icon: Icons.auto_awesome,
+            title: '本地 AI 引擎（Hermes）',
+            subtitle: agent.isRunning
+                ? '已就绪，可在 AI 对话页直接使用本地 Agent'
+                : agent.hasFailed
+                    ? '启动失败，请点击重试'
+                    : agent.isInitialized
+                        ? '环境已解压，正在启动…'
+                        : '首次启动需要解压内置引擎（约 80MB）',
+            trailing: agent.hasFailed
+                ? TextButton(onPressed: () => agent.start(), child: const Text('重试'))
+                : agent.isRunning
+                    ? const Icon(Icons.check_circle, color: Color(0xFF4ECDC4), size: 20)
+                    : const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFB347)),
+                      ),
+          ),
+          const SizedBox(height: 12),
+          _InfoCard(
+            icon: Icons.tune,
+            title: 'AI 模型配置',
+            subtitle: _aiConfigured
+                ? '已配置真实 AI，刷题出题与对话均可用'
+                : '未配置，刷题会使用示例题，请到「AI 设置」配置',
+            trailing: Icon(
+              _aiConfigured ? Icons.check_circle : Icons.error_outline,
+              color: _aiConfigured ? const Color(0xFF4ECDC4) : const Color(0xFFFFB347),
+              size: 20,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          _InfoCard(
+            icon: Icons.storage,
+            title: '数据存储',
+            subtitle: '学习数据、题目与做题记录均保存在本机，不上传云端',
+            trailing: const Icon(Icons.lock_outline, color: Color(0xFF8B7355), size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+
+  const _InfoCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8DDD0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFFFF6B35), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(color: Color(0xFF2D1810), fontSize: 15, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(subtitle,
+                    style: const TextStyle(color: Color(0xFF8B7355), fontSize: 13, height: 1.4)),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ],
       ),
     );
   }

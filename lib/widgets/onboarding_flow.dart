@@ -91,8 +91,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
     return Scaffold(
       body: SafeArea(
-        child: SwipeableStack(
-          pages: pages,
+        child: Stack(
+          children: [
+            SwipeableStack(pages: pages),
+            // 跳过引导（右上角）— 不配 AI 也能进 App，随时可去「AI 设置」补配
+            Positioned(
+              top: 8,
+              right: 12,
+              child: TextButton(
+                onPressed: () => widget.onComplete(),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.lightTextMuted,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+                child: const Text('跳过', style: TextStyle(fontSize: 14)),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -617,7 +632,9 @@ class _StepComplete extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final vendorLabel = kAiVendors.where((v) => v.id == vendorName).firstOrNull?.name ?? vendorName ?? 'AI';
+    final vendorLabel = vendorName == null
+        ? '未配置（可稍后在 AI 设置中补配）'
+        : (kAiVendors.where((v) => v.id == vendorName).firstOrNull?.name ?? vendorName);
 
     return Container(
       color: AppColors.lightBg,
@@ -634,7 +651,7 @@ class _StepComplete extends StatelessWidget {
           const SizedBox(height: 8),
           _StatLine(icon: '🎯', text: '个性化进度已初始化'),
           const SizedBox(height: 8),
-          _StatLine(icon: '🤖', text: '$vendorLabel AI 已就绪'),
+          _StatLine(icon: '🤖', text: vendorName == null ? '$vendorLabel' : '$vendorLabel AI 已就绪'),
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),

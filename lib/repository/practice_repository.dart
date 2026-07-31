@@ -62,4 +62,24 @@ class PracticeRepository {
     ''', [userId, limit]);
     return rows.map((r) => r['subject_id'] as int).toList();
   }
+
+  /// 最近做错的题（含题目、答案、解析、科目/知识点），按时间倒序去重。
+  /// 用于「错题回顾」。
+  Future<List<Map<String, dynamic>>> getRecentWrongQuestions(int userId, {int limit = 50}) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT q.id, q.content, q.answer, q.options, q.explanation,
+             kp.name AS kp_name, s.name AS subject_name,
+             MAX(pr.id) AS last_wrong_id
+      FROM practice_records pr
+      JOIN questions q ON q.id = pr.question_id
+      JOIN knowledge_points kp ON kp.id = q.kp_id
+      JOIN subjects s ON s.id = kp.subject_id
+      WHERE pr.user_id = ? AND pr.correct = 0
+      GROUP BY q.id
+      ORDER BY last_wrong_id DESC
+      LIMIT ?
+    ''', [userId, limit]);
+    return rows;
+  }
 }

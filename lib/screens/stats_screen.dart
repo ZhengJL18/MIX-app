@@ -92,10 +92,10 @@ class _StatsScreenState extends State<StatsScreen> {
                   trailing: Text('${(s.avgMastery * 100).toStringAsFixed(0)}%'),
                 ),
               ),
-            if (_subjectStats.isEmpty)
+            if (_total == 0)
               const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: Text('还没有科目数据')),
+                child: Center(child: Text('还没有做题记录，去刷题吧')),
               ),
           ],
         ),
