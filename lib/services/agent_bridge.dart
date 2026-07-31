@@ -41,9 +41,14 @@ class AgentBridge {
     }
 
     // 解压 bundle（首次启动）
-    await _extractAssets(filesDir);
-    await marker.writeAsString('ok');
-    _initialized = true;
+    try {
+      await _extractAssets(filesDir);
+      await marker.writeAsString('ok');
+      _initialized = true;
+    } catch (e) {
+      debugPrint('[AgentBridge] ensureInitialized 失败: $e');
+      rethrow;
+    }
   }
 
   /// 启动 Hermes 子进程。
@@ -89,6 +94,7 @@ class AgentBridge {
       _running = false;
       _process?.kill();
       _process = null;
+      debugPrint('[AgentBridge] start 失败: $e');
       _controller.add(AgentBridgeError('启动失败', 'Hermes Agent 启动失败: $e'));
     }
   }
