@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -93,6 +95,11 @@ class _MainShellState extends State<_MainShell> {
   /// Hermes Agent 桥接层 — 主界面生命周期内持有
   final AgentBridge _agent = AgentBridge();
 
+  /// Hermes 解压/启动进度（null = 未在解压，100 = 就绪）
+  int? _agentProgress;
+  String _agentStatus = '';
+  StreamSubscription? _agentSub;
+
   @override
   void initState() {
     super.initState();
@@ -102,12 +109,31 @@ class _MainShellState extends State<_MainShell> {
         setState(() => _currentPage = page);
       }
     });
+    // 订阅 Hermes 进度事件（首次启动解压时全屏显示进度条）
+    _agentSub = _agent.events.listen((e) {
+      if (!mounted) return;
+      if (e is AgentBridgeProgress) {
+        setState(() {
+          _agentProgress = e.percent;
+          _agentStatus = e.status;
+        });
+        if (e.percent >= 100) {
+          // 解压完成，短暂展示后消失
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted) setState(() => _agentProgress = null);
+          });
+        }
+      } else if (e is AgentBridgeError) {
+        if (mounted) setState(() => _agentProgress = null);
+      }
+    });
     // 启动时拉起 Hermes Agent（异步，失败不阻塞主界面）
     _agent.start();
   }
 
   @override
   void dispose() {
+    _agentSub?.cancel();
     _agent.dispose();
     _pageController.dispose();
     super.dispose();
@@ -117,22 +143,29 @@ class _MainShellState extends State<_MainShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.light.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTabBar(),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                children: [
-                  _ChatScreen(agent: _agent),
-                  const PracticeScreen(),
-                  _FilesScreen(agent: _agent),
-                ],
-              ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                _buildTabBar(),
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    children: [
+                      _ChatScreen(agent: _agent),
+                      const PracticeScreen(),
+                      _FilesScreen(agent: _agent),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          // Hermes 解压进度覆盖层（首次启动时显示）
+          if (_agentProgress != null)
+            _AgentProgressOverlay(percent: _agentProgress!, status: _agentStatus),
+        ],
       ),
     );
   }
@@ -235,6 +268,63 @@ class _MainShellState extends State<_MainShell> {
             style: TextStyle(
                 color: active ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
+      ),
+    );
+  }
+}
+
+/// Hermes 首次解压的全屏进度覆盖层
+class _AgentProgressOverlay extends StatelessWidget {
+  final int percent;
+  final String status;
+  const _AgentProgressOverlay({required this.percent, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.lightBg.withValues(alpha: 0.98),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome, color: AppColors.primary, size: 48),
+            const SizedBox(height: 20),
+            const Text(
+              '正在初始化学习环境...',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF2D1810)),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '首次启动需解压内置 AI 引擎（只需一次）',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF8B7355)),
+            ),
+            const SizedBox(height: 24),
+            // 进度条
+            Container(
+              width: 260,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.lightDivider,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: (percent / 100).clamp(0.0, 1.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$percent% · $status',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF8B7355)),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -34,7 +34,12 @@ class AgentBridge {
   int get port => _port;
 
   /// 确保环境已解压（首次启动时调用）
-  Future<void> ensureInitialized() async {
+  ///
+  /// [onProgress] 可选：解压时回调进度百分比（0~100）和状态文字，
+  /// 供 UI 显示可视化解压进度条。
+  Future<void> ensureInitialized({
+    void Function(int percent, String status)? onProgress,
+  }) async {
     if (_initialized) return;
 
     final filesDir = Directory(await _getFilesDir());
@@ -48,7 +53,8 @@ class AgentBridge {
 
     // 解压 bundle（首次启动）
     try {
-      await _extractAssets(filesDir);
+      onProgress?.call(0, '正在解压学习环境...');
+      await _extractAssets(filesDir, onProgress: onProgress);
       await marker.writeAsString('ok');
       _initialized = true;
     } catch (e) {
@@ -62,7 +68,9 @@ class AgentBridge {
     if (_running) return;
 
     try {
-      await ensureInitialized();
+      await ensureInitialized(onProgress: (percent, status) {
+        _controller.add(AgentBridgeProgress(percent, status));
+      });
     } catch (e) {
       debugPrint('[AgentBridge] ensureInitialized 失败: $e');
       _controller.add(AgentBridgeError('初始化失败', 'Hermes 环境解压失败: $e'));
@@ -292,7 +300,10 @@ class AgentBridge {
     throw TimeoutException('Hermes 启动超时');
   }
 
-  Future<void> _extractAssets(Directory filesDir) async {
+  Future<void> _extractAssets(
+    Directory filesDir, {
+    void Function(int percent, String status)? onProgress,
+  }) async {
     // 从 APK assets 解压 mix-agent-bundle.tar.gz。
     // 用 Dart archive 包（纯 Dart）绕开 Android SELinux 对 tar 命令的限制，
     // 并剥离 bundle 内部的 files/ 前缀（打包时带了 files/ 顶层目录）。
@@ -302,6 +313,7 @@ class AgentBridge {
       final bundleData = await rootBundle.load('assets/mix-agent-bundle.tar.gz');
       final archive = await _readTarGz(bundleData);
 
+      final total = archive.length;
       var okCount = 0;
       var failCount = 0;
       for (final entry in archive) {
@@ -320,8 +332,15 @@ class AgentBridge {
           failCount++;
           debugPrint('[AgentBridge] 解压失败 ${entry.name}: $e');
         }
+
+        // 进度回调：每解压 1/20 汇报一次（避免高频刷新卡 UI）
+        if (total > 0 && okCount % (total ~/ 20).clamp(1, total) == 0) {
+          final pct = (okCount * 100 / total).round().clamp(0, 100);
+          onProgress?.call(pct, '正在解压学习环境... $pct%');
+        }
       }
       debugPrint('[AgentBridge] 解压完成: 成功 $okCount, 失败 $failCount');
+      onProgress?.call(100, '环境就绪');
 
       // archive 解压不保留 tar 的执行权限位 → python 二进制补 chmod +x
       final py = File('${filesDir.path}/python/python3.14');
@@ -354,6 +373,11 @@ class AgentBridgeError extends AgentBridgeEvent {
   final String message;
   AgentBridgeError(this.type, this.message);
 }
+class AgentBridgeProgress extends AgentBridgeEvent {
+  final int percent;
+  final String status;
+  AgentBridgeProgress(this.percent, this.status);
+}
 
 // ── Mock 实现（开发/测试用） ──
 
@@ -361,8 +385,11 @@ class MockAgentBridge extends AgentBridge {
   bool get isRunning => true;
 
   @override
-  Future<void> ensureInitialized() async {
+  Future<void> ensureInitialized({
+    void Function(int percent, String status)? onProgress,
+  }) async {
     _initialized = true;
+    onProgress?.call(100, '环境就绪');
   }
 
   @override
