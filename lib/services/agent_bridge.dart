@@ -89,6 +89,8 @@ class AgentBridge {
           'HOME': filesDir,
           'PATH': '${filesDir}/python:/system/bin:/usr/bin:/bin',
           'TERMINAL_CWD': filesDir,
+          // python3.14 依赖 Termux 的 libandroid-support.so，已打进 bundle 的 files/python/
+          'LD_LIBRARY_PATH': '${filesDir}/python',
           // api_server 无 API_SERVER_KEY 拒绝启动，必须设置
           'API_SERVER_KEY': _apiServerKey,
         },
