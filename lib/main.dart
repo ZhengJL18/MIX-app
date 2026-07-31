@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +14,7 @@ import 'screens/stats_screen.dart';
 import 'screens/ai_settings_screen.dart';
 import 'services/agent_bridge.dart';
 import 'services/ai_service.dart';
+import 'models/message_block.dart';
 import 'data/preset_data.dart';
 import 'widgets/onboarding_flow.dart';
 
@@ -360,7 +362,8 @@ class _ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<_ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  final List<Map<String, String>> _messages = [];
+  final List<MessageBlock> _messages = [];
+  final Set<String> _userMsgIds = {};
   bool _sending = false;
 
   OpenAiCompatibleAiService? _ai;
@@ -403,28 +406,66 @@ class _ChatScreenState extends State<_ChatScreen> {
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _sending || _ai == null) return;
+    if (text.isEmpty || _sending) return;
+    final hermesUp = widget.agent.isRunning;
+    if (!hermesUp && _ai == null) return;
     _input.clear();
     setState(() {
-      _messages.add({'role': 'user', 'content': text});
+      final um = TextBlock(id: generateBlockId(), content: text);
+      _userMsgIds.add(um.id);
+      _messages.add(um);
       _sending = true;
     });
     _scrollToBottom();
     try {
-      final reply = await _ai!.chat(text);
-      if (!mounted) return;
-      setState(() {
-        _messages.add({'role': 'assistant', 'content': reply});
-        _sending = false;
-      });
+      if (hermesUp) {
+        // 本地 Hermes Agent（与 App 共用同一模型）
+        final history = _messages
+            .whereType<TextBlock>()
+            .toList()
+            .reversed
+            .skip(1) // 跳过刚加入的当前用户消息，send() 内部会用 newMessage 追加
+            .toList()
+            .reversed
+            .map((b) => {
+                  'role': _userMsgIds.contains(b.id) ? 'user' : 'assistant',
+                  'content': b.content,
+                })
+            .toList();
+        await for (final block
+            in widget.agent.send(messages: history, newMessage: text)) {
+          if (!mounted) return;
+          setState(() => _upsertBlock(block));
+          _scrollToBottom();
+        }
+      } else {
+        // Hermes 未就绪时回退外部 AI
+        final reply = await _ai!.chat(text);
+        if (!mounted) return;
+        setState(() {
+          _messages.add(TextBlock(id: generateBlockId(), content: reply));
+          _sending = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages.add({'role': 'assistant', 'content': '⚠️ $e'});
+        _messages.add(TextBlock(id: generateBlockId(), content: '⚠️ $e', isError: true));
         _sending = false;
       });
     }
+    if (mounted) setState(() => _sending = false);
     _scrollToBottom();
+  }
+
+  /// 按 id 插入或更新流式消息块（Hermes 会对同一块多次 yield 累积内容）。
+  void _upsertBlock(MessageBlock block) {
+    final idx = _messages.indexWhere((b) => b.id == block.id);
+    if (idx >= 0) {
+      _messages[idx] = block;
+    } else {
+      _messages.add(block);
+    }
   }
 
   void _scrollToBottom() {
@@ -433,6 +474,78 @@ class _ChatScreenState extends State<_ChatScreen> {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
+  }
+
+  /// 渲染一条消息块（Hermes 事件模型）。
+  Widget _messageWidget(MessageBlock block) {
+    switch (block.type) {
+      case BlockType.text:
+        final t = block as TextBlock;
+        final isUser = _userMsgIds.contains(t.id);
+        return Align(
+          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            constraints: const BoxConstraints(maxWidth: 320),
+            decoration: BoxDecoration(
+              color: isUser
+                  ? const Color(0xFFFF6B35)
+                  : (t.isError ? const Color(0xFFFFE0E0) : const Color(0xFFF0E0D0)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: isUser || t.isError || t.isStreaming
+                ? Text(
+                    t.content.isEmpty ? '…' : t.content,
+                    style: TextStyle(
+                      color: isUser ? Colors.white : const Color(0xFF2D1810),
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  )
+                : MarkdownBody(
+                    data: t.content,
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                      p: const TextStyle(color: Color(0xFF2D1810), fontSize: 14, height: 1.5),
+                    ),
+                  ),
+          ),
+        );
+      case BlockType.toolCall:
+        return _ToolCallBubble(block as ToolCallBlock);
+      case BlockType.status:
+        final s = block as StatusBlock;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: s.isWarning ? const Color(0xFFFFF3E0) : const Color(0xFFF0E8E0),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  s.isWarning ? Icons.warning_amber : Icons.info_outline,
+                  size: 14,
+                  color: const Color(0xFF8B7355),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    s.text,
+                    style: const TextStyle(color: Color(0xFF8B7355), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      case BlockType.divider:
+        return const Divider(height: 24);
+    }
   }
 
   @override
@@ -478,30 +591,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                     controller: _scroll,
                     padding: const EdgeInsets.all(16),
                     itemCount: _messages.length,
-                    itemBuilder: (_, i) {
-                      final m = _messages[i];
-                      final isUser = m['role'] == 'user';
-                      return Align(
-                        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          constraints: const BoxConstraints(maxWidth: 300),
-                          decoration: BoxDecoration(
-                            color: isUser ? const Color(0xFFFF6B35) : const Color(0xFFF0E0D0),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text(
-                            m['content'] ?? '',
-                            style: TextStyle(
-                              color: isUser ? Colors.white : const Color(0xFF2D1810),
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                    itemBuilder: (_, i) => _messageWidget(_messages[i]),
                   ),
           ),
           // 输入区
@@ -512,10 +602,12 @@ class _ChatScreenState extends State<_ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _input,
-                    enabled: _ai != null && !_sending,
+                    enabled: (widget.agent.isRunning || _ai != null) && !_sending,
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
-                      hintText: _ai == null ? '请先在设置中配置 AI' : '输入问题...',
+                      hintText: (widget.agent.isRunning || _ai != null)
+                          ? '输入问题...'
+                          : '请先在设置中配置 AI',
                       hintStyle: const TextStyle(color: Color(0xFFA09080)),
                       filled: true,
                       fillColor: const Color(0xFFFFFFFF),
@@ -529,11 +621,13 @@ class _ChatScreenState extends State<_ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: _ai != null ? _send : null,
+                  onTap: (widget.agent.isRunning || _ai != null) ? _send : null,
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: _ai != null ? const Color(0xFFFF6B35) : const Color(0xFFE0D5C7),
+                      color: (widget.agent.isRunning || _ai != null)
+                          ? const Color(0xFFFF6B35)
+                          : const Color(0xFFE0D5C7),
                       shape: BoxShape.circle,
                     ),
                     child: _sending
@@ -552,6 +646,98 @@ class _ChatScreenState extends State<_ChatScreen> {
     );
   }
 }
+/// 工具调用卡片（可点击展开结果）
+class _ToolCallBubble extends StatefulWidget {
+  final ToolCallBlock block;
+  const _ToolCallBubble(this.block);
+
+  @override
+  State<_ToolCallBubble> createState() => _ToolCallBubbleState();
+}
+
+class _ToolCallBubbleState extends State<_ToolCallBubble> {
+  @override
+  Widget build(BuildContext context) {
+    final b = widget.block;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7EFE6),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE8DDD0)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: b.isRunning ? null : () => setState(() => b.toggleExpanded()),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      b.isError
+                          ? Icons.error_outline
+                          : b.isRunning
+                              ? Icons.hourglass_top
+                              : Icons.check_circle_outline,
+                      size: 14,
+                      color: b.isError
+                          ? const Color(0xFFFF6B6B)
+                          : b.isRunning
+                              ? const Color(0xFFFFB347)
+                              : const Color(0xFF4ECDC4),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        b.toolLabel,
+                        style: const TextStyle(
+                          color: Color(0xFF5A4634),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (b.isRunning)
+                      const SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Icon(
+                        b.expanded ? Icons.expand_less : Icons.expand_more,
+                        size: 14,
+                        color: const Color(0xFF8B7355),
+                      ),
+                  ],
+                ),
+                if (b.expanded && (b.resultSummary != null || b.errorMessage != null))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      b.errorMessage ?? b.resultSummary ?? '',
+                      style: TextStyle(
+                        color: b.isError ? const Color(0xFFC0392B) : const Color(0xFF5A4634),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 文件管理页 — 显示 Hermes 运行状态 + bundle 信息
 class _FilesScreen extends StatelessWidget {
   final AgentBridge agent;

@@ -224,9 +224,12 @@ class AgentBridge {
       return;
     }
 
-    // 构造请求
+    // 构造请求 — 用 App 配置的模型（与外部对话/出题共用同一模型）
+    final settings = await AiSettings.load();
+    final model =
+        (settings != null && settings.model.isNotEmpty) ? settings.model : 'claude-sonnet-4-20250514';
     final body = jsonEncode({
-      'model': 'claude-sonnet-4-20250514',
+      'model': model,
       'messages': [
         ...messages,
         {'role': 'user', 'content': newMessage},
