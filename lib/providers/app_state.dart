@@ -51,7 +51,11 @@ class AppState extends ChangeNotifier {
   }
 
   /// 三层筛选 + 出题：选科目 -> 选知识点 -> 取/生成题目。
-  Future<void> loadNextQuestion() async {
+  ///
+  /// [onStream] 可选：AI 现场生成时实时回调累积文本，UI 可流式渲染。
+  Future<void> loadNextQuestion({
+    void Function(String accumulated)? onStream,
+  }) async {
     _loadingNext = true;
     _lastError = null;
     notifyListeners();
@@ -65,7 +69,7 @@ class AppState extends ChangeNotifier {
       final kpId =
           await selectionEngine.selectKp(kLocalUserId, subjectId, _questionIndex);
       final questionId =
-          await _pregen.nextQuestionId(kLocalUserId, kpId, subjectId);
+          await _pregen.nextQuestionId(kLocalUserId, kpId, subjectId, onStream: onStream);
       final question = await questionRepo.getById(questionId);
 
       _currentSubjectId = subjectId;

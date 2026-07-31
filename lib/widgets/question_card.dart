@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import 'rich_content.dart';
 
 /// 题目卡片 — 纯展示题干
 /// 多题型支持：根据 type 字段渲染不同交互组件
@@ -42,8 +43,8 @@ class QuestionCard extends StatelessWidget {
           // 题干
           Expanded(
             child: SingleChildScrollView(
-              child: Text(
-                question['content'] as String? ?? '',
+              child: RichContent(
+                content: question['content'] as String? ?? '',
                 style: t.bodyLarge?.copyWith(fontSize: 18, height: 1.7),
               ),
             ),

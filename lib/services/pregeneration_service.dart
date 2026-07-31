@@ -39,7 +39,14 @@ class PregenerationService {
 
   /// 取下一题：若 next_pool 里已有，直接返回并立刻触发下一次后台生成；
   /// 若没有（首次进入该知识点，或来不及生成），同步生成一次再返回。
-  Future<int> nextQuestionId(int userId, int kpId, int subjectId) async {
+  ///
+  /// [onStream] 可选：当需要现场生成时，实时回调累积文本供 UI 流式渲染。
+  Future<int> nextQuestionId(
+    int userId,
+    int kpId,
+    int subjectId, {
+    void Function(String accumulated)? onStream,
+  }) async {
     final pooled = _nextPool.remove(kpId);
     if (pooled != null) {
       _triggerPregenerate(userId, kpId, subjectId);
@@ -53,7 +60,7 @@ class PregenerationService {
       return seed['id'] as int;
     }
 
-    final id = await _generateAndStore(userId, kpId, subjectId);
+    final id = await _generateAndStore(userId, kpId, subjectId, onStream: onStream);
     _triggerPregenerate(userId, kpId, subjectId);
     return id;
   }
@@ -70,13 +77,20 @@ class PregenerationService {
     _inFlight[kpId] = future;
   }
 
-  Future<int> _generateAndStore(int userId, int kpId, int subjectId) async {
+  Future<int> _generateAndStore(
+    int userId,
+    int kpId,
+    int subjectId, {
+    void Function(String accumulated)? onStream,
+  }) async {
     final subject = await _subjectRepo.getSubjectById(subjectId);
     if (subject == null) throw StateError('科目 $subjectId 不存在');
 
     final state = await _kpStateRepo.getOrCreateState(userId: userId, kpId: kpId, subject: subject);
     final prompt = await _promptBuilder.buildPrompt(kpId: kpId, subject: subject, state: state);
-    final generated = await _ai.generateQuestion(prompt);
+    final generated = onStream != null
+        ? await _ai.generateQuestionStream(prompt, onStream)
+        : await _ai.generateQuestion(prompt);
 
     return _questionRepo.insertQuestion(
       kpId: kpId,

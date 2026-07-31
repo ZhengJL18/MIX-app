@@ -7,6 +7,7 @@ import '../widgets/question_card.dart';
 import '../widgets/answer_card.dart';
 import '../widgets/feedback_card.dart';
 import '../widgets/swipeable_stack.dart';
+import '../widgets/rich_content.dart';
 import '../engine/feedback_v2.dart';
 
 /// 刷题页 — TikTok 式下滑刷题
@@ -30,15 +31,23 @@ class _PracticeScreenState extends State<PracticeScreen> {
   String? _minorCause;
   bool _submitting = false;
 
+  /// AI 现场生成题目的流式文本（实时显示）
+  String _streamingText = '';
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
       if (appState.currentQuestion == null && !appState.loadingNext) {
-        appState.loadNextQuestion();
+        appState.loadNextQuestion(onStream: _onStream);
       }
     });
+  }
+
+  void _onStream(String accumulated) {
+    if (!mounted) return;
+    setState(() => _streamingText = accumulated);
   }
 
   Map<String, dynamic>? get _q => context.read<AppState>().currentQuestion;
@@ -78,7 +87,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
     _currentAnswer = _AnswerState.unanswered;
     _mainCause = null;
     _minorCause = null;
-    appState.loadNextQuestion();
+    _streamingText = '';
+    appState.loadNextQuestion(onStream: _onStream);
     _submitting = false;
   }
 
@@ -92,11 +102,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
       builder: (context, appState, _) {
         final q = appState.currentQuestion;
 
-        // 加载中
+        // 加载中（AI 现场生成时显示流式内容）
         if (appState.loadingNext && q == null) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          );
+          return _LoadingView(streamingText: _streamingText);
         }
         // 错误（无科目等）
         if (appState.lastError != null && q == null) {
@@ -156,6 +164,42 @@ class _PracticeScreenState extends State<PracticeScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// AI 生成题目时的加载视图 — 有流式文本时实时渲染
+class _LoadingView extends StatelessWidget {
+  final String streamingText;
+  const _LoadingView({required this.streamingText});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.lightBg,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(color: AppColors.primary),
+          const SizedBox(height: 16),
+          Text(
+            streamingText.isEmpty ? 'AI 正在生成题目...' : 'AI 正在生成题目...',
+            style: const TextStyle(color: Color(0xFF8B7355), fontSize: 14),
+          ),
+          if (streamingText.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: RichContent(
+                  content: streamingText,
+                  style: const TextStyle(color: Color(0xFF8B7355), fontSize: 13, height: 1.5),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

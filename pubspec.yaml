@@ -55,6 +55,8 @@ dependencies:
 
   # Hermes bundle 解压（绕开 Android SELinux 对 tar 的限制）
   archive: ^3.6.1
+  flutter_math_fork: ^0.7.4
+  flutter_markdown: ^0.7.7+1
 
 dev_dependencies:
   flutter_test:

@@ -23,6 +23,12 @@ class GeneratedQuestion {
 /// AI 出题服务的抽象接口，方便替换成任意厂商 API 或本地模型。
 abstract class AiService {
   Future<GeneratedQuestion> generateQuestion(String prompt);
+
+  /// 流式生成：每次回调产出累积的原始文本，供 UI 实时渲染
+  Future<GeneratedQuestion> generateQuestionStream(
+    String prompt,
+    void Function(String accumulated) onDelta,
+  );
 }
 
 /// 通用 OpenAI 兼容客户端 — DeepSeek / OpenAI / 智谱 / Kimi / 通义千问
@@ -90,6 +96,64 @@ class OpenAiCompatibleAiService implements AiService {
 
     return AnthropicAiService.parseMarkdownResponse(text);
   }
+
+  @override
+  Future<GeneratedQuestion> generateQuestionStream(
+    String prompt,
+    void Function(String accumulated) onDelta,
+  ) async {
+    final request = http.Request('POST', Uri.parse(baseUrl))
+      ..headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      })
+      ..body = jsonEncode({
+        'model': model,
+        'max_tokens': 2048,
+        'stream': true,
+        'messages': [
+          {'role': 'user', 'content': prompt},
+        ],
+      });
+
+    final response = await http.Client().send(request);
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      throw Exception('AI 出题失败: ${response.statusCode} $body');
+    }
+
+    var buffer = '';
+    var accumulated = '';
+    await for (final chunk in utf8.decoder.bind(response.stream)) {
+      buffer += chunk;
+      // 按行切分 SSE
+      while (buffer.contains('\n')) {
+        final lineEnd = buffer.indexOf('\n');
+        final line = buffer.substring(0, lineEnd).trim();
+        buffer = buffer.substring(lineEnd + 1);
+
+        if (!line.startsWith('data:')) continue;
+        final data = line.substring(5).trim();
+        if (data == '[DONE]') break;
+
+        try {
+          final json = jsonDecode(data) as Map<String, dynamic>;
+          final delta = json['choices']?[0]?['delta']?['content'] as String?;
+          if (delta != null && delta.isNotEmpty) {
+            accumulated += delta;
+            onDelta(accumulated);
+          }
+        } catch (_) {
+          // 跳过格式异常的行
+        }
+      }
+    }
+
+    if (accumulated.isEmpty) {
+      throw Exception('AI 返回为空，请检查 API Key 或模型名');
+    }
+    return AnthropicAiService.parseMarkdownResponse(accumulated);
+  }
 }
 
 /// 默认实现：调用 Anthropic Messages API。
@@ -135,6 +199,15 @@ class AnthropicAiService implements AiService {
     return parseMarkdownResponse(text);
   }
 
+  @override
+  Future<GeneratedQuestion> generateQuestionStream(
+    String prompt,
+    void Function(String accumulated) onDelta,
+  ) async {
+    // Anthropic 暂退化为非流式
+    return generateQuestion(prompt);
+  }
+
   /// 解析 build_prompt 中约定的 Markdown 返回格式：
   /// ## 题目 / ## 答案 / ## 系数（复杂度/理解难度/冗余度/覆盖率）。
   static GeneratedQuestion parseMarkdownResponse(String text) {
@@ -176,6 +249,26 @@ class MockAiService implements AiService {
     await Future.delayed(const Duration(milliseconds: 300));
     return GeneratedQuestion(
       content: '（示例题目，尚未配置 AI 接口）\n\n$prompt',
+      answer: '（示例答案，请在设置中配置 AI 接口以获取真实题目）',
+      cplxCoef: 0.4,
+      undCoef: 0.4,
+      redCoef: 0.2,
+      covCoef: 0.3,
+    );
+  }
+
+  @override
+  Future<GeneratedQuestion> generateQuestionStream(
+    String prompt,
+    void Function(String accumulated) onDelta,
+  ) async {
+    final text = '（示例题目，尚未配置 AI 接口）\n\n$prompt';
+    for (var i = 1; i <= text.length; i += 20) {
+      onDelta(text.substring(0, i));
+      await Future.delayed(const Duration(milliseconds: 30));
+    }
+    return GeneratedQuestion(
+      content: text,
       answer: '（示例答案，请在设置中配置 AI 接口以获取真实题目）',
       cplxCoef: 0.4,
       undCoef: 0.4,

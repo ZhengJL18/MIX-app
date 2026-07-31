@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import 'rich_content.dart';
 
 /// 答案卡片 — 显示答案 + 解析 + 答对/答错按钮
 class AnswerCard extends StatelessWidget {
@@ -57,7 +58,10 @@ class AnswerCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text(answer, style: t.bodyLarge?.copyWith(height: 1.6)),
+                        RichContent(
+                          content: answer,
+                          style: t.bodyLarge?.copyWith(height: 1.6),
+                        ),
                       ],
                     ),
                   ),
@@ -66,9 +70,14 @@ class AnswerCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text('解析', style: t.titleMedium?.copyWith(fontSize: 15)),
                     const SizedBox(height: 6),
-                    Text(explanation, style: TextStyle(
-                      color: AppColors.lightTextMuted, height: 1.5, fontSize: 14,
-                    )),
+                    RichContent(
+                      content: explanation,
+                      style: const TextStyle(
+                        color: AppColors.lightTextMuted,
+                        height: 1.5,
+                        fontSize: 14,
+                      ),
+                    ),
                   ],
                   // 四维系数
                   if (cplx != null || und != null || red != null || cov != null) ...[
