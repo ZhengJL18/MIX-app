@@ -41,7 +41,7 @@ class _FunResultCardState extends State<FunResultCard> {
           emoji: '🤔',
           tagline: '还没做题怎么能看答案呢，高低蒙一个啊喂！',
           subText: '下滑可跳过本题',
-          accentColor: Color(0xFF8B7355),
+          accentColor: AppColors.lightTextMuted,
         );
       case FunResultType.correct:
         return _useVariantB
@@ -137,7 +137,7 @@ class _FunResultCardState extends State<FunResultCard> {
           const SizedBox(height: 8),
           Text(
             '下滑${widget.type == FunResultType.skip ? '跳过本题' : '查看解析'} ➡',
-            style: const TextStyle(color: Color(0xFFA09080), fontSize: 13),
+            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
           ),
         ],
       ),

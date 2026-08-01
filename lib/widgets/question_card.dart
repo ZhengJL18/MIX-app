@@ -60,7 +60,7 @@ class QuestionCard extends StatelessWidget {
                   const SizedBox(height: 24),
                   // 选项
                   if (options.isNotEmpty) ...[
-                    const Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
+                    Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
                     const SizedBox(height: 12),
                     for (var i = 0; i < options.length; i++)
                       _OptionButton(
@@ -158,7 +158,7 @@ class _OptionButton extends StatelessWidget {
               Expanded(
                 child: RichContent(
                   content: option,
-                  style: const TextStyle(color: AppColors.lightText, fontSize: 15, height: 1.5),
+                  style: TextStyle(color: AppColors.lightText, fontSize: 15, height: 1.5),
                 ),
               ),
             ],

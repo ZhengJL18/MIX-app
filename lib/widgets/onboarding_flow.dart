@@ -605,7 +605,7 @@ class _StepSubjectsState extends State<_StepSubjects> {
                         const Divider(height: 24),
                         Text('🤖 AI 正在推荐...', style: t.labelLarge),
                         const SizedBox(height: 8),
-                        const LinearProgressIndicator(color: AppColors.primary),
+                        LinearProgressIndicator(color: AppColors.primary),
                       ],
 
                       // 自定义添加
@@ -1045,7 +1045,7 @@ class _AgentPrepBanner extends StatelessWidget {
             Flexible(
               child: Text(
                 '学习环境准备中 $pct%',
-                style: const TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
+                style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

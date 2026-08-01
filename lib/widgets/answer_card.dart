@@ -92,7 +92,7 @@ class AnswerCard extends StatelessWidget {
         // 四维系数
         if (cplx != null || und != null || red != null || cov != null) ...[
           const SizedBox(height: 12),
-          const Row(
+          Row(
             children: [
               Text('出题参考系数：', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted)),
             ],
@@ -180,15 +180,15 @@ class _ResultBanner extends StatelessWidget {
           if (answered && !isCorrect) ...[
             const SizedBox(height: 6),
             Text('你的答案：$selected',
-                style: const TextStyle(color: Color(0xFF2D1810), fontSize: 13)),
+                style: TextStyle(color: AppColors.lightText, fontSize: 13)),
             const SizedBox(height: 2),
             Text('正确答案：$answer',
-                style: const TextStyle(color: Color(0xFF2D1810), fontSize: 13)),
+                style: TextStyle(color: AppColors.lightText, fontSize: 13)),
           ],
           if (answered && isCorrect) ...[
             const SizedBox(height: 6),
             Text('你的答案：$selected',
-                style: const TextStyle(color: Color(0xFF2D1810), fontSize: 13)),
+                style: TextStyle(color: AppColors.lightText, fontSize: 13)),
           ],
         ],
       ),

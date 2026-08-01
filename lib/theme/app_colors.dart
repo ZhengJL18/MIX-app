@@ -1,33 +1,42 @@
 import 'package:flutter/material.dart';
+import 'app_palette.dart';
 
-/// MIX 暖色高饱和色调 — 多邻国式大胆配色
+/// 全局活动色板 — 由 AppTheme 切换时更新。
+/// AppColors.xxx 均从当前活动色板动态读取，全局跟随主题。
 class AppColors {
   AppColors._();
 
+  /// 当前激活的色板（默认 warm，App 启动时由主题系统设置）。
+  static AppPalette palette = AppPalettePresets.warm;
+
   // ─── 品牌主色 ───
-  static const Color primary = Color(0xFFFF6B35); // 珊瑚橙
-  static const Color primaryLight = Color(0xFFFFF0E8);
-  static const Color secondary = Color(0xFFFFB347); // 暖琥珀
-  static const Color accent = Color(0xFFFF4D6D); // 暖粉
-  static const Color gold = Color(0xFFFFD700); // 金色
+  static Color get primary => palette.primary;
+  static Color get primaryLight => palette.primaryLight;
+  static Color get secondary => palette.secondary;
+  static Color get accent => palette.accent;
+  static Color get gold => palette.gold;
 
   // ─── 语义色 ───
-  static const Color correct = Color(0xFF4ECDC4); // 青绿
-  static const Color wrong = Color(0xFFFF6B6B); // 珊瑚红
+  static Color get correct => palette.correct;
+  static Color get wrong => palette.wrong;
 
-  // ─── 浅色模式 ───
-  static const Color lightBg = Color(0xFFFFF8F0); // 奶油白
-  static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceAlt = Color(0xFFFFF0E0);
-  static const Color lightText = Color(0xFF2D1810); // 暖深棕
-  static const Color lightTextMuted = Color(0xFF8B7355); // 暖灰棕
-  static const Color lightDivider = Color(0xFFE8DDD0);
+  // ─── 背景/表面 ───
+  static Color get lightBg => palette.bg;
+  static Color get lightSurface => palette.surface;
+  static Color get lightSurfaceAlt => palette.surfaceAlt;
 
-  // ─── 深色模式 ───
-  static const Color darkBg = Color(0xFF1A0F0A); // 暖深棕黑
-  static const Color darkSurface = Color(0xFF2D1810);
-  static const Color darkSurfaceAlt = Color(0xFF3D2218);
-  static const Color darkText = Color(0xFFFFF0E8); // 奶白
-  static const Color darkTextMuted = Color(0xFFA09080);
-  static const Color darkDivider = Color(0xFF3D2D20);
+  // ─── 文字 ───
+  static Color get lightText => palette.text;
+  static Color get lightTextMuted => palette.textMuted;
+
+  // ─── 分割线 ───
+  static Color get lightDivider => palette.divider;
+
+  // ─── 深色模式兼容（旧引用，映射到同一色板） ───
+  static Color get darkBg => palette.bg;
+  static Color get darkSurface => palette.surface;
+  static Color get darkSurfaceAlt => palette.surfaceAlt;
+  static Color get darkText => palette.text;
+  static Color get darkTextMuted => palette.textMuted;
+  static Color get darkDivider => palette.divider;
 }

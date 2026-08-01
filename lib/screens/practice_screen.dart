@@ -197,8 +197,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
         }
         // 无题目
         if (q == null) {
-          return const Center(
-            child: Text('暂无题目', style: TextStyle(color: Color(0xFF8B7355), fontSize: 16)),
+          return Center(
+            child: Text('暂无题目', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 16)),
           );
         }
 
@@ -370,11 +370,11 @@ class _LoadingView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: AppColors.primary),
+          CircularProgressIndicator(color: AppColors.primary),
           const SizedBox(height: 16),
           const Text(
             'AI 正在生成题目...',
-            style: TextStyle(color: Color(0xFF8B7355), fontSize: 14),
+            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
           ),
           if (streamingText.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -382,7 +382,7 @@ class _LoadingView extends StatelessWidget {
               child: SingleChildScrollView(
                 child: RichContent(
                   content: streamingText,
-                  style: const TextStyle(color: Color(0xFF8B7355), fontSize: 13, height: 1.5),
+                  style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.5),
                 ),
               ),
             ),
@@ -435,9 +435,9 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.info_outline, size: 48, color: Color(0xFF8B7355)),
+            Icon(Icons.info_outline, size: 48, color: AppColors.lightTextMuted),
             const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF8B7355))),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: AppColors.lightTextMuted)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: onRetry, child: const Text('重试')),
           ],

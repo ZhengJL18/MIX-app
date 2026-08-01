@@ -31,7 +31,7 @@ class FeedbackCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.error_outline, color: AppColors.wrong, size: 22),
+            Icon(Icons.error_outline, color: AppColors.wrong, size: 22),
             const SizedBox(width: 8),
             Text('错因分析', style: t.headlineMedium?.copyWith(fontSize: 20)),
           ],

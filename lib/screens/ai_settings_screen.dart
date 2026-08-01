@@ -120,15 +120,15 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     color: AppColors.primaryLight,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Row(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(Icons.info_outline, color: AppColors.primary, size: 18),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '这里配置的模型会同时用于「刷题出题」「AI 对话」和本地 Hermes Agent，三处共用同一个模型与 Key。',
-                          style: TextStyle(color: Color(0xFF2D1810), fontSize: 13, height: 1.5),
+                          style: TextStyle(color: AppColors.lightText, fontSize: 13, height: 1.5),
                         ),
                       ),
                     ],
@@ -166,7 +166,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   const SizedBox(height: 6),
                   Text(
                     '推荐：${_preset!.models.join('、')}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.lightTextMuted),
+                    style: TextStyle(fontSize: 12, color: AppColors.lightTextMuted),
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -228,17 +228,17 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   InputDecoration _fieldDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.lightTextMuted),
+      hintStyle: TextStyle(color: AppColors.lightTextMuted),
       filled: true,
       fillColor: AppColors.lightSurface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.lightDivider),
+        borderSide: BorderSide(color: AppColors.lightDivider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.lightDivider),
+        borderSide: BorderSide(color: AppColors.lightDivider),
       ),
     );
   }

@@ -111,7 +111,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     s.reviewed
                         ? '${(s.avgMastery * 100).toStringAsFixed(0)}%'
                         : '未开始',
-                    style: const TextStyle(color: Color(0xFFA09080)),
+                    style: TextStyle(color: AppColors.lightTextMuted),
                   ),
                 ),
               ),

@@ -7,8 +7,10 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
+import 'theme/app_palette.dart';
 import 'theme/app_colors.dart';
 import 'providers/app_state.dart';
+import 'providers/theme_provider.dart';
 import 'screens/practice_screen.dart';
 import 'screens/subject_management_screen.dart';
 import 'screens/stats_screen.dart';
@@ -30,16 +32,46 @@ class MixApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppState(),
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Mix',
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: ThemeMode.system,
-        home: const AppEntry(),
-      ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppState()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: const _ThemedApp(),
+    );
+  }
+}
+
+/// 根据 ThemeProvider 选择主题构建 MaterialApp。
+class _ThemedApp extends StatefulWidget {
+  const _ThemedApp();
+
+  @override
+  State<_ThemedApp> createState() => _ThemedAppState();
+}
+
+class _ThemedAppState extends State<_ThemedApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 加载已保存的主题偏好
+    Future.microtask(() => context.read<ThemeProvider>().load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        final id = themeProvider.themeId;
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Mix',
+          theme: AppTheme.build(id, brightness: Brightness.light),
+          darkTheme: AppTheme.build(id, brightness: Brightness.dark),
+          themeMode: themeProvider.mode,
+          home: const AppEntry(),
+        );
+      },
     );
   }
 }
@@ -200,13 +232,14 @@ class _MainShellState extends State<_MainShell> {
           // 左上角 Logo = 二级菜单入口
           GestureDetector(
             onTap: _openMenu,
-            child: const Row(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.auto_awesome, color: Color(0xFFFF6B35), size: 22),
-                SizedBox(width: 6),
+                Icon(Icons.auto_awesome, color: AppColors.primary, size: 22),
+                const SizedBox(width: 6),
                 Text('Mix',
                     style: TextStyle(
-                        color: Color(0xFF2D1810),
+                        color: AppColors.lightText,
                         fontSize: 20,
                         fontWeight: FontWeight.bold)),
               ],
@@ -229,6 +262,55 @@ class _MainShellState extends State<_MainShell> {
     if (changed == true && mounted) {
       setState(() => _aiConfigVersion++);
     }
+  }
+
+  /// 打开主题切换对话框。
+  void _openThemePicker(BuildContext rootContext) {
+    showDialog<void>(
+      context: rootContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('选择主题'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final theme in AppThemeId.values)
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppTheme.palettes[theme]!.primary,
+                  child: const Icon(Icons.check, color: Colors.white, size: 16),
+                ),
+                title: Text(theme.label),
+                trailing: Consumer<ThemeProvider>(
+                  builder: (_, tp, __) =>
+                      Icon(tp.themeId == theme ? Icons.radio_button_checked : Icons.radio_button_off,
+                          color: AppTheme.palettes[theme]!.primary),
+                ),
+                onTap: () {
+                  ctx.read<ThemeProvider>().setTheme(theme);
+                  Navigator.of(ctx).pop();
+                },
+              ),
+            const Divider(),
+            // 明暗模式
+            const Text('明暗模式', style: TextStyle(fontWeight: FontWeight.w600)),
+            for (final mode in [
+              (ThemeMode.system, '跟随系统'),
+              (ThemeMode.light, '浅色'),
+              (ThemeMode.dark, '深色'),
+            ])
+              RadioListTile<ThemeMode>(
+                title: Text(mode.$2),
+                value: mode.$1,
+                groupValue: ctx.watch<ThemeProvider>().mode,
+                onChanged: (v) => ctx.read<ThemeProvider>().setMode(v!),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('关闭')),
+        ],
+      ),
+    );
   }
 
   /// 二级菜单：点左上角 Logo 弹出
@@ -275,6 +357,10 @@ class _MainShellState extends State<_MainShell> {
               Navigator.of(ctx).pop();
               _openAiSettings();
             }),
+            _menuItem(ctx, Icons.palette_outlined, '主题', () {
+              Navigator.of(ctx).pop();
+              _openThemePicker(context);
+            }),
             const SizedBox(height: 24),
           ],
         ),
@@ -284,7 +370,7 @@ class _MainShellState extends State<_MainShell> {
 
   Widget _menuItem(BuildContext ctx, IconData icon, String label, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFFFF6B35)),
+      leading: Icon(icon, color: AppColors.primary),
       title: Text(label),
       onTap: onTap,
     );
@@ -300,18 +386,18 @@ class _MainShellState extends State<_MainShell> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFFFF6B35).withValues(alpha: 0.15)
+              ? AppColors.primary.withValues(alpha: 0.15)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: active ? const Color(0xFFFF6B35) : const Color(0xFF8B7355)),
+            Icon(icon, size: 16, color: active ? AppColors.primary : AppColors.lightTextMuted),
             const SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
-                    color: active ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
+                    color: active ? AppColors.primary : AppColors.lightTextMuted,
                     fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
           ],
         ),
@@ -338,12 +424,12 @@ class _AgentProgressOverlay extends StatelessWidget {
             const SizedBox(height: 20),
             const Text(
               '正在初始化学习环境...',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF2D1810)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.lightText),
             ),
             const SizedBox(height: 8),
             Text(
               '首次启动需解压内置 AI 引擎（只需一次）',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF8B7355)),
+              style: TextStyle(fontSize: 13, color: AppColors.lightTextMuted),
             ),
             const SizedBox(height: 24),
             // 进度条
@@ -368,7 +454,7 @@ class _AgentProgressOverlay extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '$percent% · $status',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF8B7355)),
+              style: TextStyle(fontSize: 13, color: AppColors.lightTextMuted),
             ),
           ],
         ),
@@ -606,15 +692,15 @@ class _ChatScreenState extends State<_ChatScreen> {
             constraints: const BoxConstraints(maxWidth: 320),
             decoration: BoxDecoration(
               color: isUser
-                  ? const Color(0xFFFF6B35)
-                  : (t.isError ? const Color(0xFFFFE0E0) : const Color(0xFFF0E0D0)),
+                  ? AppColors.primary
+                  : (t.isError ? AppColors.wrong : AppColors.lightSurfaceAlt),
               borderRadius: BorderRadius.circular(14),
             ),
             child: isUser || t.isError || t.isStreaming
                 ? Text(
                     t.content.isEmpty ? '…' : t.content,
                     style: TextStyle(
-                      color: isUser ? Colors.white : const Color(0xFF2D1810),
+                      color: isUser ? Colors.white : AppColors.lightText,
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -622,7 +708,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                 : MarkdownBody(
                     data: t.content,
                     styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                      p: const TextStyle(color: Color(0xFF2D1810), fontSize: 14, height: 1.5),
+                      p: TextStyle(color: AppColors.lightText, fontSize: 14, height: 1.5),
                     ),
                   ),
           ),
@@ -637,7 +723,7 @@ class _ChatScreenState extends State<_ChatScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: s.isWarning ? const Color(0xFFFFF3E0) : const Color(0xFFF0E8E0),
+              color: s.isWarning ? AppColors.primaryLight : AppColors.lightSurfaceAlt,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -646,13 +732,13 @@ class _ChatScreenState extends State<_ChatScreen> {
                 Icon(
                   s.isWarning ? Icons.warning_amber : Icons.info_outline,
                   size: 14,
-                  color: const Color(0xFF8B7355),
+                  color: AppColors.lightTextMuted,
                 ),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     s.text,
-                    style: const TextStyle(color: Color(0xFF8B7355), fontSize: 12),
+                    style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
                   ),
                 ),
               ],
@@ -667,7 +753,7 @@ class _ChatScreenState extends State<_ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFFFF8F0),
+      color: AppColors.lightBg,
       child: Column(
         children: [
           // 顶部 Hermes 状态条
@@ -678,10 +764,10 @@ class _ChatScreenState extends State<_ChatScreen> {
                 Icon(Icons.bolt,
                     size: 14,
                     color: widget.agent.isRunning
-                        ? const Color(0xFF4ECDC4)
+                        ? AppColors.correct
                         : widget.agent.hasFailed
-                            ? const Color(0xFFFF6B6B)
-                            : const Color(0xFFA09080)),
+                            ? AppColors.wrong
+                            : AppColors.lightTextMuted),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -690,7 +776,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                         : widget.agent.hasFailed
                             ? 'Hermes 启动失败'
                             : '云端 AI 对话（本地 Hermes 尚未就绪）',
-                    style: const TextStyle(color: Color(0xFFA09080), fontSize: 12),
+                    style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
                   ),
                 ),
                 if (widget.agent.hasFailed)
@@ -699,11 +785,11 @@ class _ChatScreenState extends State<_ChatScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B6B).withValues(alpha: 0.12),
+                        color: AppColors.wrong.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text('重试',
-                          style: TextStyle(color: Color(0xFFC0392B), fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: TextStyle(color: AppColors.wrong, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                   ),
               ],
@@ -713,14 +799,14 @@ class _ChatScreenState extends State<_ChatScreen> {
           // 消息列表
           Expanded(
             child: _messages.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline, color: Color(0xFF8B7355), size: 56),
-                        SizedBox(height: 12),
+                        Icon(Icons.chat_bubble_outline, color: AppColors.lightTextMuted, size: 56),
+                        const SizedBox(height: 12),
                         Text('问我任何学习问题',
-                            style: TextStyle(color: Color(0xFF8B7355), fontSize: 16)),
+                            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 16)),
                       ],
                     ),
                   )
@@ -745,9 +831,9 @@ class _ChatScreenState extends State<_ChatScreen> {
                       hintText: (widget.agent.isRunning || _ai != null)
                           ? '输入问题...'
                           : '请先在设置中配置 AI',
-                      hintStyle: const TextStyle(color: Color(0xFFA09080)),
+                      hintStyle: TextStyle(color: AppColors.lightTextMuted),
                       filled: true,
-                      fillColor: const Color(0xFFFFFFFF),
+                      fillColor: Colors.white,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
@@ -765,10 +851,10 @@ class _ChatScreenState extends State<_ChatScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _sending
-                          ? const Color(0xFF8B7355)
+                          ? AppColors.lightTextMuted
                           : (widget.agent.isRunning || _ai != null)
-                              ? const Color(0xFFFF6B35)
-                              : const Color(0xFFE0D5C7),
+                              ? AppColors.primary
+                              : AppColors.lightDivider,
                       shape: BoxShape.circle,
                     ),
                     child: _sending
@@ -802,9 +888,9 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF7EFE6),
+          color: AppColors.lightSurfaceAlt,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE8DDD0)),
+          border: Border.all(color: AppColors.lightDivider),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -825,17 +911,17 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                               : Icons.check_circle_outline,
                       size: 14,
                       color: b.isError
-                          ? const Color(0xFFFF6B6B)
+                          ? AppColors.wrong
                           : b.isRunning
-                              ? const Color(0xFFFFB347)
-                              : const Color(0xFF4ECDC4),
+                              ? AppColors.secondary
+                              : AppColors.correct,
                     ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         b.toolLabel,
                         style: const TextStyle(
-                          color: Color(0xFF5A4634),
+                          color: AppColors.lightTextMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -852,7 +938,7 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                       Icon(
                         b.expanded ? Icons.expand_less : Icons.expand_more,
                         size: 14,
-                        color: const Color(0xFF8B7355),
+                        color: AppColors.lightTextMuted,
                       ),
                   ],
                 ),
@@ -862,7 +948,7 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                     child: Text(
                       b.errorMessage ?? b.resultSummary ?? '',
                       style: TextStyle(
-                        color: b.isError ? const Color(0xFFC0392B) : const Color(0xFF5A4634),
+                        color: b.isError ? AppColors.wrong : AppColors.lightTextMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -914,7 +1000,7 @@ class _FilesScreenState extends State<_FilesScreen> {
   Widget build(BuildContext context) {
     final agent = widget.agent;
     return Container(
-      color: const Color(0xFFFFF8F0),
+      color: AppColors.lightBg,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -931,10 +1017,10 @@ class _FilesScreenState extends State<_FilesScreen> {
             trailing: agent.hasFailed
                 ? TextButton(onPressed: () => agent.start(), child: const Text('重试'))
                 : agent.isRunning
-                    ? const Icon(Icons.check_circle, color: Color(0xFF4ECDC4), size: 20)
+                    ? Icon(Icons.check_circle, color: AppColors.correct, size: 20)
                     : const SizedBox(
                         width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFB347)),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
                       ),
           ),
           const SizedBox(height: 12),
@@ -946,7 +1032,7 @@ class _FilesScreenState extends State<_FilesScreen> {
                 : '未配置，刷题会使用示例题，请到「AI 设置」配置',
             trailing: Icon(
               _aiConfigured ? Icons.check_circle : Icons.error_outline,
-              color: _aiConfigured ? const Color(0xFF4ECDC4) : const Color(0xFFFFB347),
+              color: _aiConfigured ? AppColors.correct : AppColors.secondary,
               size: 20,
             ),
           ),
@@ -955,7 +1041,7 @@ class _FilesScreenState extends State<_FilesScreen> {
             icon: Icons.storage,
             title: '数据存储',
             subtitle: '学习数据、题目与做题记录均保存在本机，不上传云端',
-            trailing: const Icon(Icons.lock_outline, color: Color(0xFF8B7355), size: 20),
+            trailing: Icon(Icons.lock_outline, color: AppColors.lightTextMuted, size: 20),
           ),
         ],
       ),
@@ -981,24 +1067,24 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8DDD0)),
+        border: Border.all(color: AppColors.lightDivider),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: const Color(0xFFFF6B35), size: 24),
+          Icon(icon, color: AppColors.primary, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: const TextStyle(color: Color(0xFF2D1810), fontSize: 15, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: AppColors.lightText, fontSize: 15, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Text(subtitle,
-                    style: const TextStyle(color: Color(0xFF8B7355), fontSize: 13, height: 1.4)),
+                    style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.4)),
               ],
             ),
           ),
