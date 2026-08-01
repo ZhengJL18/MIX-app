@@ -63,7 +63,11 @@ class _ThemedAppState extends State<_ThemedApp> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
         final id = themeProvider.themeId;
+        // key 随主题/明暗变化 → 强制整棵 MaterialApp 重建，
+        // 让所有用 AppColors.xxx（全局 getter）的组件重新读新色板，
+        // 否则主题切换后页面颜色不刷新。
         return MaterialApp(
+          key: ValueKey('${id.id}-${themeProvider.mode.name}'),
           debugShowCheckedModeBanner: false,
           title: 'Mix',
           theme: AppTheme.build(id, brightness: Brightness.light),
