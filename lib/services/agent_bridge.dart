@@ -116,9 +116,22 @@ class AgentBridge {
 
       // Hermes 0.15.2 通过 gateway 暴露 OpenAI 兼容 API（/v1/chat/completions）。
       // 端口由 api_server 的 DEFAULT_PORT=8642 决定，agent_bridge 从 /health 读取。
+      //
+      // 华为 SELinux 策略拒绝 App 直接执行 app_data_file 里的 ELF 二进制
+      // （avc: denied execute_no_trans），直接 exec python3.14 会 Permission denied。
+      // 改用 /system/bin/linker64 作为启动器：execve 目标是系统 linker（允许），
+      // linker 再以 dlopen 方式加载 python3.14 及其动态库（execute 允许）。
+      // 已在真机沙盒验证 gateway 经 linker64 可正常启动（/health 200）。
       _process = await Process.start(
-        pythonBin,
-        ['-m', 'hermes_cli.main', 'gateway', 'run'],
+        '/system/bin/linker64',
+        [
+          pythonBin,
+          '-S',
+          '-m',
+          'hermes_cli.main',
+          'gateway',
+          'run',
+        ],
         workingDirectory: srcDir,
         environment: {
           'PYTHONPATH': '$pkgDir:$srcDir:${srcDir}/plugins/mix',
@@ -173,6 +186,16 @@ class AgentBridge {
 
   /// 读取当前 AI 配置（设置页用）。
   Future<AiSettings?> readAiSettings() => AiSettings.load();
+
+  /// 重新从 SharedPreferences 读取配置并同步给 Hermes。
+  ///
+  /// onboarding 预热时 gateway 可能在用户填入 AI key 之前就启动了，
+  /// 完成引导后调用此方法，让 Hermes 用上最新的 provider/key。
+  Future<void> applySavedSettings() async {
+    final settings = await AiSettings.load();
+    if (settings == null) return;
+    await applyAiSettings(settings);
+  }
 
   /// 保存 AI 配置并同步给 Hermes。
   ///

@@ -59,22 +59,16 @@ class OpenAiCompatibleAiService implements AiService {
 
   /// 通用对话（Hermes 本地 Agent 不可用时的替代实现）
   Future<String> chat(String prompt) async {
-    final response = await http.post(
-      Uri.parse(baseUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode({
-        'model': model,
-        'max_tokens': 2048,
-        'messages': [
-          {'role': 'system', 'content': '你是 MIX 学习助手，一个 AI 学习教练。用中文简洁回答。'},
-          {'role': 'user', 'content': prompt},
-        ],
-      }),
-    );
+    final body = jsonEncode({
+      'model': model,
+      'max_tokens': 2048,
+      'messages': [
+        {'role': 'system', 'content': '你是 MIX 学习助手，一个 AI 学习教练。用中文简洁回答。'},
+        {'role': 'user', 'content': prompt},
+      ],
+    });
 
+    final response = await _postWithRetry(body);
     if (response.statusCode != 200) {
       throw Exception('AI 对话失败: ${response.statusCode} ${response.body}');
     }
@@ -84,21 +78,15 @@ class OpenAiCompatibleAiService implements AiService {
 
   @override
   Future<GeneratedQuestion> generateQuestion(String prompt) async {
-    final response = await http.post(
-      Uri.parse(baseUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode({
-        'model': model,
-        'max_tokens': 2048,
-        'messages': [
-          {'role': 'user', 'content': prompt},
-        ],
-      }),
-    );
+    final body = jsonEncode({
+      'model': model,
+      'max_tokens': 2048,
+      'messages': [
+        {'role': 'user', 'content': prompt},
+      ],
+    });
 
+    final response = await _postWithRetry(body);
     if (response.statusCode != 200) {
       throw Exception('AI 出题请求失败: ${response.statusCode} ${response.body}');
     }
@@ -110,30 +98,77 @@ class OpenAiCompatibleAiService implements AiService {
     return AnthropicAiService.parseMarkdownResponse(text);
   }
 
+  /// 发起一次 POST，非 200 或网络异常时自动重试一次。
+  ///
+  /// 解决首次请求偶发的瞬时 401/网络抖动（第二次即正常）问题。
+  Future<http.Response> _postWithRetry(String body) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $apiKey',
+    };
+
+    http.Response doPost() {
+      // 同步发起；用 Client 便于重试复用连接
+      return http.post(Uri.parse(baseUrl), headers: headers, body: body);
+    }
+
+    try {
+      final resp = await doPost();
+      // 首次失败（401/5xx/限流）时短暂等待后重试一次
+      if (resp.statusCode != 200) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        return await doPost();
+      }
+      return resp;
+    } catch (_) {
+      // 网络异常 → 重试一次
+      await Future.delayed(const Duration(milliseconds: 600));
+      return doPost();
+    }
+  }
+
   @override
   Future<GeneratedQuestion> generateQuestionStream(
     String prompt,
     void Function(String accumulated) onDelta,
   ) async {
-    final request = http.Request('POST', Uri.parse(baseUrl))
-      ..headers.addAll({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      })
-      ..body = jsonEncode({
-        'model': model,
-        'max_tokens': 2048,
-        'stream': true,
-        'messages': [
-          {'role': 'user', 'content': prompt},
-        ],
-      });
+    http.StreamedResponse? response;
+    // 建连失败重试一次
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final request = http.Request('POST', Uri.parse(baseUrl))
+          ..headers.addAll({
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          })
+          ..body = jsonEncode({
+            'model': model,
+            'max_tokens': 2048,
+            'stream': true,
+            'messages': [
+              {'role': 'user', 'content': prompt},
+            ],
+          });
 
-    final response = await http.Client().send(request);
-    if (response.statusCode != 200) {
-      final body = await response.stream.bytesToString();
-      throw Exception('AI 出题失败: ${response.statusCode} $body');
+        response = await http.Client().send(request);
+        if (response.statusCode != 200) {
+          final body = await response.stream.bytesToString();
+          if (attempt == 0) {
+            await Future.delayed(const Duration(milliseconds: 600));
+            continue;
+          }
+          throw Exception('AI 出题失败: ${response.statusCode} $body');
+        }
+        break;
+      } catch (e) {
+        if (attempt == 0) {
+          await Future.delayed(const Duration(milliseconds: 600));
+          continue;
+        }
+        rethrow;
+      }
     }
+    if (response == null) throw Exception('AI 出题失败：无法连接');
 
     var buffer = '';
     var accumulated = '';

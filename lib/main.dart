@@ -87,8 +87,10 @@ class _AppEntryState extends State<AppEntry> {
     }
     return OnboardingFlow(
       agent: _agent,
-      onComplete: () {
-        setState(() => _onboardingComplete = true);
+      onComplete: () async {
+        // onboarding 刚写入 AI 配置，重新同步给 Hermes（预热时可能用了空配置）
+        await _agent.applySavedSettings();
+        if (mounted) setState(() => _onboardingComplete = true);
       },
     );
   }
@@ -191,35 +193,46 @@ class _MainShellState extends State<_MainShell> {
   Widget _buildTabBar() {
     final isActive = (int page) => _currentPage == page;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: AppTheme.light.cardTheme.color,
       child: Row(
         children: [
           // 左上角 Logo = 二级菜单入口
           GestureDetector(
             onTap: _openMenu,
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.auto_awesome, color: Color(0xFFFF6B35), size: 22),
-                const SizedBox(width: 8),
+                Icon(Icons.auto_awesome, color: Color(0xFFFF6B35), size: 22),
+                SizedBox(width: 6),
                 Text('Mix',
                     style: TextStyle(
-                        color: const Color(0xFF2D1810),
+                        color: Color(0xFF2D1810),
                         fontSize: 20,
                         fontWeight: FontWeight.bold)),
               ],
             ),
           ),
           const Spacer(),
-          _tabButton('AI', 0, isActive, Icons.chat_bubble_outline),
-          _tabButton('刷题', 1, isActive, Icons.edit_note),
-          _tabButton('文件', 2, isActive, Icons.folder_outlined),
+          // tab 用 Flexible 包裹，空间不足时自动收缩，避免溢出
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _tabButton('AI', 0, isActive, Icons.chat_bubble_outline),
+                  _tabButton('刷题', 1, isActive, Icons.edit_note),
+                  _tabButton('文件', 2, isActive, Icons.folder_outlined),
+                ],
+              ),
+            ),
+          ),
           // 显眼的设置入口（也可从左上角 Logo 菜单进入）
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
           GestureDetector(
             onTap: _openAiSettings,
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               child: Icon(Icons.settings_outlined,
                   color: _currentPage == 3 ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
                   size: 20),
@@ -305,8 +318,8 @@ class _MainShellState extends State<_MainShell> {
       onTap: () => _pageController.animateToPage(page,
           duration: const Duration(milliseconds: 300), curve: Curves.easeOut),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: active
               ? const Color(0xFFFF6B35).withValues(alpha: 0.15)
