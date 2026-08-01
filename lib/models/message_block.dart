@@ -87,8 +87,8 @@ class TextBlock extends MessageBlock {
 
 /// ── 工具调用块（可折叠三态卡片） ──
 class ToolCallBlock extends MessageBlock {
-  final String toolName;
-  final String toolLabel;
+  String toolName;
+  String toolLabel;
   final Map<String, dynamic> args;
   String status;        // running / success / error
   String? resultSummary;
@@ -120,6 +120,16 @@ class ToolCallBlock extends MessageBlock {
   void markError(String error) {
     status = 'error';
     errorMessage = error;
+  }
+
+  /// 工具调用完成（finish_reason=tool_calls）→ 记录参数摘要，供展示。
+  void markToolCall(String argsJson) {
+    if (argsJson.isNotEmpty) {
+      // 参数摘要存到 resultSummary 用于展示（args 保持不可变默认）
+      resultSummary = argsJson.length > 200
+          ? '${argsJson.substring(0, 200)}…'
+          : argsJson;
+    }
   }
 
   void toggleExpanded() => _expanded = !_expanded;

@@ -253,6 +253,11 @@ class AgentBridge {
 
   /// 发送消息并接收事件流（SSE）。
   ///
+  /// Hermes api_server 暴露的是 OpenAI 兼容协议（/v1/chat/completions），
+  /// SSE 格式为标准 OpenAI chunk：`data: {"choices":[{"delta":{...}}]}`。
+  /// 这里解析 delta.content（流式文本）和 delta.tool_calls（工具调用），
+  /// 实现真正的流式渲染 + 多步工具调用展示（类似 Claude Code 的拆任务机制）。
+  ///
   /// [messages] 是对话历史，[newMessage] 是当前输入。
   /// 返回事件流，每条事件对应一个 MessageBlock 操作。
   Stream<MessageBlock> send({
@@ -277,10 +282,11 @@ class AgentBridge {
       'stream': true,
     });
 
-    // 当前正在累积的文本块（在 try 外声明以便 catch 能访问）
+    // 当前正在累积的文本块 / 工具调用（在 try 外声明以便 catch 能访问）
     TextBlock? currentText;
-    ToolCallBlock? currentTool;
     String pendingBuffer = '';
+    // 工具调用累积：index → (ToolCallBlock, name, argsBuffer)
+    final Map<int, _ToolCallAccum> toolAccum = {};
 
     try {
       final client = HttpClient();
@@ -292,78 +298,88 @@ class AgentBridge {
       final response = await request.close();
       final stream = response.transform(utf8.decoder);
 
-
+      // 逐字节缓冲解码，避免 Android 流式缓冲导致 SSE 行不完整
+      String buffer = '';
       await for (final chunk in stream) {
-        // 解析 SSE 行
-        for (final line in chunk.split('\n')) {
-          if (!line.startsWith('data: ')) continue;
-          final data = line.substring(6);
-          if (data == '[DONE]') break;
+        buffer += chunk;
+        final lines = buffer.split('\n');
+        buffer = lines.removeLast();
+
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty || !trimmed.startsWith('data: ')) continue;
+          final data = trimmed.substring(6);
+          if (data == '[DONE]') continue;
 
           try {
             final event = jsonDecode(data) as Map<String, dynamic>;
-            final type = event['type'] as String?;
+            final choices = event['choices'] as List<dynamic>?;
+            if (choices == null || choices.isEmpty) continue;
+            final choice = choices[0] as Map<String, dynamic>;
+            final delta = choice['delta'] as Map<String, dynamic>? ?? {};
+            final finish = choice['finish_reason'] as String?;
 
-            switch (type) {
-              case 'text_delta':
-                final content = event['content'] as String? ?? '';
-                pendingBuffer += content;
-                // 每 100ms 左右 yield 一次，让 UI 有时间刷新
-                if (pendingBuffer.length > 20 || pendingBuffer.contains('\n')) {
-                  if (currentText == null) {
-                    currentText = TextBlock(id: generateBlockId(), isStreaming: true);
+            // ── 流式文本（delta.content）──
+            final content = delta['content'] as String?;
+            if (content != null && content.isNotEmpty) {
+              pendingBuffer += content;
+              if (pendingBuffer.length >= 12 || pendingBuffer.contains('\n')) {
+                if (currentText == null) {
+                  currentText = TextBlock(id: generateBlockId(), isStreaming: true);
+                }
+                currentText.append(pendingBuffer);
+                yield currentText;
+                pendingBuffer = '';
+              }
+            }
+
+            // ── 工具调用（delta.tool_calls，参数跨 chunk 累积）──
+            final toolCalls = delta['tool_calls'] as List<dynamic>?;
+            if (toolCalls != null) {
+              for (final tc in toolCalls) {
+                final tcMap = tc as Map<String, dynamic>;
+                final idx = (tcMap['index'] as num?)?.toInt() ?? 0;
+                final func = tcMap['function'] as Map<String, dynamic>?;
+                if (func == null) continue;
+
+                var acc = toolAccum[idx];
+                if (acc == null) {
+                  acc = _ToolCallAccum(
+                    block: ToolCallBlock(
+                      id: generateBlockId(),
+                      toolName: func['name'] as String? ?? 'unknown',
+                      toolLabel: func['name'] as String? ?? '工具调用',
+                      status: 'running',
+                    ),
+                  );
+                  toolAccum[idx] = acc;
+                  // 工具开始时先刷出当前文本缓冲
+                  if (pendingBuffer.isNotEmpty && currentText != null) {
+                    currentText.append(pendingBuffer);
+                    yield currentText;
+                    pendingBuffer = '';
                   }
-                  currentText.append(pendingBuffer);
-                  yield currentText;
-                  pendingBuffer = '';
+                  yield acc.block;
                 }
-                break;
-
-              case 'tool_start':
-                // 刷出剩余缓冲区
-                if (pendingBuffer.isNotEmpty && currentText != null) {
-                  currentText.append(pendingBuffer);
-                  yield currentText;
-                  pendingBuffer = '';
+                // 工具名可能后到（首个 chunk 只有 args）
+                if (func['name'] is String && (func['name'] as String).isNotEmpty) {
+                  acc.name = func['name'] as String;
+                  acc.block.toolName = acc.name;
+                  acc.block.toolLabel = acc.name;
                 }
-                currentTool = ToolCallBlock(
-                  id: generateBlockId(),
-                  toolName: event['name'] as String? ?? 'unknown',
-                  toolLabel: event['label'] as String? ?? event['name'] as String? ?? '工具调用',
-                  status: 'running',
-                );
-                yield currentTool;
-                break;
-
-              case 'tool_end':
-                if (currentTool != null) {
-                  final result = event['result'] as String?;
-                  if (event['error'] == true) {
-                    currentTool.markError(result ?? '执行失败');
-                  } else {
-                    currentTool.markSuccess((result?.length ?? 0) > 150 ? '${result!.substring(0, 150)}...' : result);
-                  }
-                  yield currentTool;
-                  currentTool = null;
+                final argsDelta = func['arguments'] as String?;
+                if (argsDelta != null && argsDelta.isNotEmpty) {
+                  acc.argsBuffer += argsDelta;
                 }
-                break;
+              }
+            }
 
-              case 'status':
-                yield StatusBlock(
-                  id: generateBlockId(),
-                  text: event['text'] as String? ?? '',
-                  isWarning: event['warning'] == true,
-                );
-                break;
-
-              case 'error':
-                if (currentText != null) {
-                  currentText.markError(event['message'] as String? ?? '未知错误');
-                  yield currentText;
-                } else {
-                  yield TextBlock(id: generateBlockId(), content: '⚠️ ${event['message']}', isError: true);
-                }
-                break;
+            // ── 结束（finish_reason）→ 收尾工具调用 ──
+            if (finish == 'tool_calls') {
+              for (final acc in toolAccum.values) {
+                acc.block.markToolCall(acc.argsBuffer);
+                yield acc.block;
+              }
             }
           } catch (_) {}
         }
@@ -474,6 +490,15 @@ class AgentBridge {
     final tar = TarDecoder().decodeBytes(decompressed, verify: false);
     return tar.files;
   }
+}
+
+/// SSE 工具调用累积器 — 工具参数跨多个 chunk 增量到达，这里聚合。
+class _ToolCallAccum {
+  final ToolCallBlock block;
+  String name;
+  String argsBuffer = '';
+
+  _ToolCallAccum({required this.block, this.name = ''});
 }
 
 // ── 事件类型 ──
