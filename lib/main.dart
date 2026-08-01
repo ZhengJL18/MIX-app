@@ -1018,7 +1018,7 @@ class _FilesScreenState extends State<_FilesScreen> {
                 ? TextButton(onPressed: () => agent.start(), child: const Text('重试'))
                 : agent.isRunning
                     ? Icon(Icons.check_circle, color: AppColors.correct, size: 20)
-                    : const SizedBox(
+                    : SizedBox(
                         width: 16, height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
                       ),

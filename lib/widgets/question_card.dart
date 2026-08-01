@@ -39,7 +39,7 @@ class QuestionCard extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
+                child: Text(
                   '单选题',
                   style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
