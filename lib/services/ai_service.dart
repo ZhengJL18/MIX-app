@@ -107,8 +107,7 @@ class OpenAiCompatibleAiService implements AiService {
       'Authorization': 'Bearer $apiKey',
     };
 
-    http.Response doPost() {
-      // 同步发起；用 Client 便于重试复用连接
+    Future<http.Response> doPost() {
       return http.post(Uri.parse(baseUrl), headers: headers, body: body);
     }
 

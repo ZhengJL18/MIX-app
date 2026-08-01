@@ -154,10 +154,10 @@ class _SafeMath extends StatelessWidget {
     try {
       return Math.tex(
         tex,
-        isDisplayMode: displayMode,
+        mathStyle: displayMode ? MathStyle.display : MathStyle.text,
         textStyle: mathStyle,
         // 解析失败回退显示原始公式，保证内容可见、布局不崩
-        errorBuilder: (context, error) => Text(
+        onErrorFallback: (_) => Text(
           tex,
           style: mathStyle,
           textAlign: TextAlign.center,
