@@ -479,12 +479,19 @@ class _ChatScreen extends StatefulWidget {
   State<_ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<_ChatScreen> {
+class _ChatScreenState extends State<_ChatScreen>
+    with AutomaticKeepAliveClientMixin {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final List<MessageBlock> _messages = [];
   final Set<String> _userMsgIds = {};
   bool _sending = false;
+
+  // 切 tab 时不销毁本页（PageView 默认会 dispose 离开的页）。
+  // 保持存活 → _streamSub 不取消 → Hermes 回复在后台继续，
+  // 切回来状态完整（用户要的"冻结当前状态"）。
+  @override
+  bool get wantKeepAlive => true;
 
   StreamSubscription? _agentSub;
   StreamSubscription<MessageBlock>? _streamSub;
@@ -756,6 +763,7 @@ class _ChatScreenState extends State<_ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin 要求
     return Container(
       color: AppColors.lightBg,
       child: Column(
