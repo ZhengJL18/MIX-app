@@ -158,8 +158,9 @@ class AgentBridge {
         }
       });
 
-      // 等待就绪
-      await _waitForHealth(timeout: const Duration(seconds: 10));
+      // 等待就绪。Hermes gateway 冷启动慢（手机端 Python 解释器 + 导入依赖
+      // 需 20-30 秒），10 秒不够，放宽到 45 秒避免误判启动失败。
+      await _waitForHealth(timeout: const Duration(seconds: 45));
       _running = true;
       _failed = false;
 
