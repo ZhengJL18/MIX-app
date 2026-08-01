@@ -134,6 +134,11 @@ class AgentBridge {
         ],
         workingDirectory: srcDir,
         environment: {
+          // bundle 的 python 是相对布局：可执行文件在 files/python/，
+          // 标准库（lib-python/、lib-dynload/）也在 files/python/ 下。
+          // PYTHONHOME 必须指向该目录，否则 Python 启动时找不到 encodings
+          // 等标准库 → Fatal Python error: Failed to import encodings。
+          'PYTHONHOME': '${filesDir}/python',
           'PYTHONPATH': '$pkgDir:$srcDir:${srcDir}/plugins/mix',
           'HOME': filesDir,
           'HERMES_HOME': hermesHome,

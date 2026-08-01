@@ -223,6 +223,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       }
     }
 
+    // 自定义科目：用户手动添加的科目也真实创建（带一个默认知识点）
+    for (final name in _customSubjects) {
+      final subjectId = await subjectRepo.insertSubject(name: name);
+      final kpId = await kpRepo.insertKp(subjectId: subjectId, name: '综合');
+      await kpStateRepo.createState(userId: 1, kpId: kpId, initialMastery: 0.3);
+    }
+
     if (!mounted) return;
     widget.onComplete();
   }
