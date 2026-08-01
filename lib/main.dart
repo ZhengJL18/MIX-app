@@ -85,9 +85,12 @@ class _AppEntryState extends State<AppEntry> {
     if (_onboardingComplete == true) {
       return _MainShell(agent: _agent);
     }
-    return OnboardingFlow(onComplete: () {
-      setState(() => _onboardingComplete = true);
-    });
+    return OnboardingFlow(
+      agent: _agent,
+      onComplete: () {
+        setState(() => _onboardingComplete = true);
+      },
+    );
   }
 }
 
