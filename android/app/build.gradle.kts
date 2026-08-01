@@ -14,6 +14,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // 固定签名：CI 与本地构建共用 android/app/mix-release.jks，
+    // 保证所有构建产物签名一致，更新时可覆盖安装不丢数据。
+    signingConfigs {
+        create("release") {
+            storeFile = file("../app/mix-release.jks")
+            storePassword = "mixrelease2026"
+            keyAlias = "mix"
+            keyPassword = "mixrelease2026"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.mix.mix_app"
         minSdk = flutter.minSdkVersion
@@ -23,8 +34,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
