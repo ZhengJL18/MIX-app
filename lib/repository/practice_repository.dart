@@ -63,6 +63,18 @@ class PracticeRepository {
     return rows.map((r) => r['subject_id'] as int).toList();
   }
 
+  /// 某科目下是否有做题记录。用于统计页区分"未开始"与真实掌握度。
+  Future<bool> hasRecordsForSubject(int userId, int subjectId) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM practice_records pr
+      JOIN questions q ON q.id = pr.question_id
+      JOIN knowledge_points kp ON kp.id = q.kp_id
+      WHERE pr.user_id = ? AND kp.subject_id = ?
+    ''', [userId, subjectId]);
+    return (rows.first['c'] as int? ?? 0) > 0;
+  }
+
   /// 最近做错的题（含题目、答案、解析、科目/知识点），按时间倒序去重。
   /// 用于「错题回顾」。
   Future<List<Map<String, dynamic>>> getRecentWrongQuestions(int userId, {int limit = 50}) async {

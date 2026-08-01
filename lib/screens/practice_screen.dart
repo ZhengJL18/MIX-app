@@ -54,6 +54,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
   final PageController _pageCtrl = PageController();
 
+  /// 上一题的 questionIndex，用于检测新题加载完成时重置到第 0 页
+  int _lastQuestionIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +64,19 @@ class _PracticeScreenState extends State<PracticeScreen> {
       final appState = context.read<AppState>();
       if (appState.currentQuestion == null && !appState.loadingNext) {
         appState.loadNextQuestion(onStream: _onStream);
+      }
+    });
+  }
+
+  /// 新题真正加载完成（questionIndex 变化）后，重置回第 0 页。
+  /// 不能在 _nextQuestion 里立即 jumpToPage(0) —— 那时新题还没生成，
+  /// 旧题的 PageView 还在，直接跳会造成翻页错乱（bug：回弹/累积多页）。
+  void _handleQuestionIndexChanged(int newIndex) {
+    if (newIndex == _lastQuestionIndex) return;
+    _lastQuestionIndex = newIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _pageCtrl.hasClients) {
+        _pageCtrl.jumpToPage(0);
       }
     });
   }
@@ -95,17 +111,17 @@ class _PracticeScreenState extends State<PracticeScreen> {
     });
   }
 
-  /// 滑过最后一页：未作答=跳过，已作答=提交。
+  /// 已作答 → 提交并进入下一题（由答案页的「下一题」按钮触发）。
   Future<void> _onAdvance() async {
     if (_submitting) return;
 
-    // 未作答 → 跳过本题，不记录
+    // 未作答不应走到这里（skip 由 onPageChanged 处理）
     if (_currentAnswer == _AnswerState.unanswered) {
       _nextQuestion(skip: true);
       return;
     }
 
-    // 答错但没选主因：回跳反馈区（最后一页）
+    // 答错但没选主因：回跳反馈区（最后一页），不提交
     if (_currentAnswer == _AnswerState.wrong && _mainCause == null) {
       _pageCtrl.animateToPage(2,
           duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -150,7 +166,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
     _minorCause = null;
     _streamingText = '';
     context.read<AppState>().loadNextQuestion(onStream: _onStream);
-    _pageCtrl.jumpToPage(0);
+    // 不在此处 jumpToPage(0)：新题未加载时旧 PageView 还在，
+    // 直接跳会造成翻页错乱。由 _handleQuestionIndexChanged 在新题
+    // 加载完成后统一重置。
   }
 
   /// 反馈页主因/辅因变更回调
@@ -161,6 +179,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, appState, _) {
+        // 新题加载完成 → 重置回第 0 页（不能提前 jump，见 _nextQuestion 注释）
+        _handleQuestionIndexChanged(appState.questionIndex);
+
         final q = appState.currentQuestion;
 
         // 加载中（AI 现场生成时显示流式内容）
@@ -182,10 +203,13 @@ class _PracticeScreenState extends State<PracticeScreen> {
         }
 
         final hasOptions = _hasOptions(q['options']);
+        final answered = _currentAnswer != _AnswerState.unanswered;
 
         // 动态页面：
-        // - 选择题：未作答 2 页（题目→趣味skip），已作答 3 页（题目→趣味结果→答案）
-        // - 非选择题（历史无选项题）：2 页（题目→答案+手动判卷按钮），不做趣味skip
+        // - 选择题未作答：2 页（题目→趣味skip），滑到趣味页 = 跳过
+        // - 选择题已作答：3 页（题目→趣味结果→答案+解析），答案页停留展示，
+        //   点「下一题」按钮或滑到趣味页再滑才进入下一题
+        // - 非选择题（历史无选项题）：2 页（题目→答案+手动判卷），不做趣味
         final pages = <Widget>[
           // Page 0 — 题目
           QuestionCard(
@@ -204,6 +228,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               minorCause: _minorCause,
               onMainCauseChanged: _onMainCauseChanged,
               onMinorCauseChanged: _onMinorCauseChanged,
+              onNext: _onAdvance,
             )
           else
             FunResultCard(
@@ -215,7 +240,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
             ),
 
           // Page 2 — 选择题已作答时的答案+解析（做错含错因反馈）
-          if (hasOptions && _currentAnswer != _AnswerState.unanswered)
+          if (hasOptions && answered)
             _AnswerDetailPage(
               question: q,
               selectedOption: _selectedOption,
@@ -224,6 +249,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               minorCause: _minorCause,
               onMainCauseChanged: _onMainCauseChanged,
               onMinorCauseChanged: _onMinorCauseChanged,
+              onNext: _onAdvance,
             ),
         ];
 
@@ -238,9 +264,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   controller: _pageCtrl,
                   pages: pages,
                   onPageChanged: (pageIdx) {
-                    // 滑到最后一页 → 提交或跳过
-                    if (pageIdx >= pages.length - 1) {
-                      _onAdvance();
+                    // 只有未作答时滑到趣味 skip 页才跳过；
+                    // 已作答答案页用「下一题」按钮进入，不自动提交
+                    if (_currentAnswer == _AnswerState.unanswered &&
+                        pageIdx >= pages.length - 1) {
+                      _nextQuestion(skip: true);
                     }
                   },
                 ),
@@ -254,6 +282,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
 }
 
 /// 答案+解析页（第 3 页）— 做对显示答案解析，做错额外含错因反馈。
+///
+/// 页面底部有「下一题」按钮（[onNext]），用户在答案页停留看完后
+/// 点按钮进入下一题。已作答时不再"滑到即提交"。
 class _AnswerDetailPage extends StatelessWidget {
   final Map<String, dynamic> question;
   final String? selectedOption;
@@ -262,6 +293,7 @@ class _AnswerDetailPage extends StatelessWidget {
   final String? minorCause;
   final ValueChanged<String?> onMainCauseChanged;
   final ValueChanged<String?> onMinorCauseChanged;
+  final VoidCallback onNext;
 
   const _AnswerDetailPage({
     required this.question,
@@ -271,6 +303,7 @@ class _AnswerDetailPage extends StatelessWidget {
     required this.minorCause,
     required this.onMainCauseChanged,
     required this.onMinorCauseChanged,
+    required this.onNext,
   });
 
   @override
@@ -300,11 +333,19 @@ class _AnswerDetailPage extends StatelessWidget {
                     onMinorCauseChanged: onMinorCauseChanged,
                   ),
                 ],
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    '下滑进入下一题 ➡',
-                    style: const TextStyle(color: Color(0xFFA09080), fontSize: 13),
+                const SizedBox(height: 24),
+                // 「下一题」按钮 — 明确进入下一题，避免滑到即提交导致解析一闪而过
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: onNext,
+                    icon: const Icon(Icons.arrow_downward, size: 18),
+                    label: const Text('下一题', style: TextStyle(fontSize: 15)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
                   ),
                 ),
               ],

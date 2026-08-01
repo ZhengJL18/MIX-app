@@ -37,7 +37,7 @@ class MixApp extends StatelessWidget {
         title: 'Mix',
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
-        themeMode: ThemeMode.light,
+        themeMode: ThemeMode.system,
         home: const AppEntry(),
       ),
     );
@@ -213,31 +213,9 @@ class _MainShellState extends State<_MainShell> {
             ),
           ),
           const Spacer(),
-          // tab 用 Flexible 包裹，空间不足时自动收缩，避免溢出
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _tabButton('AI', 0, isActive, Icons.chat_bubble_outline),
-                  _tabButton('刷题', 1, isActive, Icons.edit_note),
-                  _tabButton('文件', 2, isActive, Icons.folder_outlined),
-                ],
-              ),
-            ),
-          ),
-          // 显眼的设置入口（也可从左上角 Logo 菜单进入）
-          const SizedBox(width: 2),
-          GestureDetector(
-            onTap: _openAiSettings,
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(Icons.settings_outlined,
-                  color: _currentPage == 3 ? const Color(0xFFFF6B35) : const Color(0xFF8B7355),
-                  size: 20),
-            ),
-          ),
+          _tabButton('AI', 0, isActive, Icons.chat_bubble_outline),
+          _tabButton('刷题', 1, isActive, Icons.edit_note),
+          _tabButton('文件', 2, isActive, Icons.folder_outlined),
         ],
       ),
     );

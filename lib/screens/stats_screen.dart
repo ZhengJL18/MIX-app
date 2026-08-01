@@ -37,6 +37,22 @@ class _StatsScreenState extends State<StatsScreen> {
     final subjects = await _subjectRepo.getAllSubjects();
     final stats = <_SubjectStat>[];
     for (final subj in subjects) {
+      // 该科目是否有做题记录（决定显示真实掌握度还是"未开始"）
+      final hasRecords = await _practiceRepo.hasRecordsForSubject(
+        userId: kLocalUserId,
+        subjectId: subj['id'] as int,
+      );
+
+      if (!hasRecords) {
+        stats.add(_SubjectStat(
+          name: subj['name'] as String,
+          avgMastery: 0,
+          kpCount: 0,
+          reviewed: false,
+        ));
+        continue;
+      }
+
       final kps = await _kpRepo.getKpsBySubject(subj['id'] as int);
       double sum = 0;
       for (final kp in kps) {
@@ -88,8 +104,15 @@ class _StatsScreenState extends State<StatsScreen> {
               Card(
                 child: ListTile(
                   title: Text(s.name),
-                  subtitle: LinearProgressIndicator(value: s.avgMastery.clamp(0, 1)),
-                  trailing: Text('${(s.avgMastery * 100).toStringAsFixed(0)}%'),
+                  subtitle: s.reviewed
+                      ? LinearProgressIndicator(value: s.avgMastery.clamp(0, 1))
+                      : const LinearProgressIndicator(value: 0),
+                  trailing: Text(
+                    s.reviewed
+                        ? '${(s.avgMastery * 100).toStringAsFixed(0)}%'
+                        : '未开始',
+                    style: const TextStyle(color: Color(0xFFA09080)),
+                  ),
                 ),
               ),
             if (_total == 0)
@@ -108,5 +131,11 @@ class _SubjectStat {
   final String name;
   final double avgMastery;
   final int kpCount;
-  _SubjectStat({required this.name, required this.avgMastery, required this.kpCount});
+  final bool reviewed;
+  _SubjectStat({
+    required this.name,
+    required this.avgMastery,
+    required this.kpCount,
+    this.reviewed = true,
+  });
 }
