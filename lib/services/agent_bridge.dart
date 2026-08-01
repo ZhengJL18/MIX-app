@@ -105,6 +105,17 @@ class AgentBridge {
     // Hermes gateway api_server 固定端口 8642（见 api_server.py DEFAULT_PORT）
     _port = 8642;
 
+    // 若端口已被监听（gateway 已在跑，例如重复 start() 或上次残留），
+    // 直接复用，不再拉第二个进程（否则 Hermes 检测到双实例会退出）。
+    if (await _isPortListening(_port)) {
+      debugPrint('[AgentBridge] gateway 已在运行，直接复用端口 $_port');
+      _running = true;
+      _failed = false;
+      _starting = false;
+      _controller.add(AgentBridgeStatus('agent_ready', 'Hermes 已就绪'));
+      return;
+    }
+
     try {
       final pythonBin = '${filesDir}/python/python3.14';
       final pkgDir = '${filesDir}/python-packages';
@@ -416,6 +427,19 @@ class AgentBridge {
     // Android 下返回 /data/data/包名/files/
     // Dart 端可以用 platform 包获取，这里简化
     return '/data/data/com.mix.mix_app/files';
+  }
+
+  /// 检查本机端口是否已被监听（Hermes gateway 是否已在运行）。
+  Future<bool> _isPortListening(int port) async {
+    try {
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse('http://127.0.0.1:$port/health'));
+      final response = await request.close();
+      await response.drain<void>();
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _waitForHealth({Duration timeout = const Duration(seconds: 60)}) async {
