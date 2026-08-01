@@ -25,66 +25,50 @@ class FeedbackCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final labels = kCauseLabels.entries.toList();
 
-    return Container(
-      color: AppColors.lightBg,
-      child: Column(
-        children: [
-          // 内容区：可滚动，滚到底后下滑自然翻页
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: AppColors.wrong, size: 22),
-                      const SizedBox(width: 8),
-                      Text('错因分析', style: t.headlineMedium?.copyWith(fontSize: 20)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // 主因（必选）
-                  Text('主因（必选）', style: t.titleMedium),
-                  const SizedBox(height: 8),
-                  ...labels.map((e) => _CauseButton(
-                    label: e.key,
-                    hint: e.value,
-                    selected: mainCause == e.key,
-                    color: AppColors.wrong,
-                    onTap: () => onMainCauseChanged(mainCause == e.key ? null : e.key),
-                  )),
-                  const SizedBox(height: 20),
-                  // 辅因（可选）
-                  Text('辅因（可选）', style: t.titleMedium),
-                  const SizedBox(height: 8),
-                  ...labels.map((e) => _CauseButton(
-                    label: e.key,
-                    hint: e.value,
-                    selected: minorCause == e.key,
-                    color: AppColors.secondary,
-                    onTap: () => onMinorCauseChanged(minorCause == e.key ? null : e.key),
-                  )),
-                  const SizedBox(height: 24),
-                ],
-              ),
+    // 内容块（不管理滚动）—— 由外层滚动容器统一滚动
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.wrong, size: 22),
+            const SizedBox(width: 8),
+            Text('错因分析', style: t.headlineMedium?.copyWith(fontSize: 20)),
+          ],
+        ),
+        const SizedBox(height: 20),
+        // 主因（必选）
+        Text('主因（必选）', style: t.titleMedium),
+        const SizedBox(height: 8),
+        ...labels.map((e) => _CauseButton(
+          label: e.key,
+          hint: e.value,
+          selected: mainCause == e.key,
+          color: AppColors.wrong,
+          onTap: () => onMainCauseChanged(mainCause == e.key ? null : e.key),
+        )),
+        const SizedBox(height: 20),
+        // 辅因（可选）
+        Text('辅因（可选）', style: t.titleMedium),
+        const SizedBox(height: 8),
+        ...labels.map((e) => _CauseButton(
+          label: e.key,
+          hint: e.value,
+          selected: minorCause == e.key,
+          color: AppColors.secondary,
+          onTap: () => onMinorCauseChanged(minorCause == e.key ? null : e.key),
+        )),
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            mainCause == null ? '请先选择主因' : '主因已选 ✓',
+            style: TextStyle(
+              color: mainCause == null ? AppColors.lightTextMuted.withValues(alpha: 0.5) : AppColors.lightTextMuted,
+              fontSize: 14,
             ),
           ),
-          // 底部提交提示
-          Container(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Center(
-              child: Text(
-                mainCause == null ? '请先选择主因' : '下滑提交反馈 ➡',
-                style: TextStyle(
-                  color: mainCause == null ? AppColors.lightTextMuted.withValues(alpha: 0.5) : AppColors.lightTextMuted,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -279,11 +279,27 @@ class AnthropicAiService implements AiService {
       return double.tryParse(m.group(1)!);
     }
 
-    // 解析选项行：A. xxx / A.xxx / A、xxx
+    // 解析选项行：兼容 A. / A、 / A) / A） / A: / A： / A．，
+    // 以及前导 markdown 符号（- A. / * A. / **A.** 等）
     final options = <String>[];
+    final optionRe = RegExp(
+      r'^[\s\-*·•]*[A-D][.、)）:：．]\s*(.+)$',
+    );
     for (final line in optionsSection.split('\n')) {
-      final m = RegExp(r'^\s*[A-D][.、)．]\s*(.+)$').firstMatch(line.trim());
+      final cleaned = line.replaceAll(RegExp(r'^\s*\*\*|\*\*\s*$'), '').trim();
+      final m = optionRe.firstMatch(cleaned);
       if (m != null) options.add(m.group(1)!.trim());
+    }
+    // 如果没解析出选项，尝试从题干/选项区提取"1. xxx / ① xxx"等数字序号（兜底）
+    if (options.length < 2 && optionsSection.isNotEmpty) {
+      final fallbackRe = RegExp(r'^[\s\-*·•]*(?:[A-Da-d1-4][.、)）:：．])\s*(.+)$');
+      for (final line in optionsSection.split('\n')) {
+        final cleaned = line.replaceAll(RegExp(r'^\s*\*\*|\*\*\s*$'), '').trim();
+        final m = fallbackRe.firstMatch(cleaned);
+        if (m != null && !options.contains(m.group(1)!.trim())) {
+          options.add(m.group(1)!.trim());
+        }
+      }
     }
 
     // 答案可能是单个大写字母（A-D）或选项文本 → 统一成选项文本
