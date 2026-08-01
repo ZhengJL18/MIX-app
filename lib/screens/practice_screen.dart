@@ -95,10 +95,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
     });
   }
 
-  /// 非选择题兜底手动判卷（历史无选项题）
-  void _onCorrect() => setState(() => _currentAnswer = _AnswerState.correct);
-  void _onWrong() => setState(() => _currentAnswer = _AnswerState.wrong);
-
   /// 滑过最后一页：未作答=跳过，已作答=提交。
   Future<void> _onAdvance() async {
     if (_submitting) return;
@@ -198,7 +194,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
             onOptionSelected: _onOptionSelected,
           ),
 
-          // Page 1 — 非选择题直接给答案+手动按钮（否则趣味结果页）
+          // Page 1 — 非选择题直接给答案（否则趣味结果页）
           if (!hasOptions)
             _AnswerDetailPage(
               question: q,
@@ -208,8 +204,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
               minorCause: _minorCause,
               onMainCauseChanged: _onMainCauseChanged,
               onMinorCauseChanged: _onMinorCauseChanged,
-              onCorrect: _onCorrect,
-              onWrong: _onWrong,
             )
           else
             FunResultCard(
@@ -230,8 +224,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
               minorCause: _minorCause,
               onMainCauseChanged: _onMainCauseChanged,
               onMinorCauseChanged: _onMinorCauseChanged,
-              onCorrect: _onCorrect,
-              onWrong: _onWrong,
             ),
         ];
 
@@ -270,8 +262,6 @@ class _AnswerDetailPage extends StatelessWidget {
   final String? minorCause;
   final ValueChanged<String?> onMainCauseChanged;
   final ValueChanged<String?> onMinorCauseChanged;
-  final VoidCallback onCorrect;
-  final VoidCallback onWrong;
 
   const _AnswerDetailPage({
     required this.question,
@@ -281,13 +271,10 @@ class _AnswerDetailPage extends StatelessWidget {
     required this.minorCause,
     required this.onMainCauseChanged,
     required this.onMinorCauseChanged,
-    required this.onCorrect,
-    required this.onWrong,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 有 options 是选择题（自动判卷）；无 options 是历史非选择题（保留手动按钮）
     final hasOptions = _hasOptions(question['options']);
 
     return Column(
@@ -302,8 +289,6 @@ class _AnswerDetailPage extends StatelessWidget {
                   question: question,
                   selectedOption: selectedOption,
                   isCorrect: isCorrect,
-                  onCorrect: onCorrect,
-                  onWrong: onWrong,
                 ),
                 // 做错 → 错因反馈（主因必选）
                 if (!isCorrect && hasOptions) ...[

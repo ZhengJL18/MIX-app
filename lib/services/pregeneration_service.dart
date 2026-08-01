@@ -92,11 +92,22 @@ class PregenerationService {
         ? await _ai.generateQuestionStream(prompt, onStream)
         : await _ai.generateQuestion(prompt);
 
+    // 全选择题模式兜底：AI 没解析出选项时，用答案 + 占位干扰项生成选项，
+    // 保证刷题页一定能自动判卷，不会出现"需要自己判断对错"。
+    var options = generated.options;
+    var correctAnswer = generated.correctAnswer;
+    if (options.isEmpty) {
+      correctAnswer = generated.correctAnswer.isNotEmpty
+          ? generated.correctAnswer
+          : generated.content.trim();
+      options = [correctAnswer, '以上都不是', '无法确定', '选项 D'];
+    }
+
     return _questionRepo.insertQuestion(
       kpId: kpId,
       content: generated.content,
-      answer: generated.correctAnswer,
-      options: generated.options,
+      answer: correctAnswer,
+      options: options,
       explanation: generated.explanation,
       cplxCoef: generated.cplxCoef,
       undCoef: generated.undCoef,

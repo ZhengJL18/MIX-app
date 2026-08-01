@@ -13,16 +13,12 @@ class AnswerCard extends StatelessWidget {
   final Map<String, dynamic> question;
   final String? selectedOption;
   final bool isCorrect;
-  final VoidCallback onCorrect;
-  final VoidCallback onWrong;
 
   const AnswerCard({
     super.key,
     required this.question,
     this.selectedOption,
     required this.isCorrect,
-    required this.onCorrect,
-    required this.onWrong,
   });
 
   @override
@@ -111,45 +107,6 @@ class AnswerCard extends StatelessWidget {
               _CoefChip('冗余', red, AppColors.accent),
               const SizedBox(width: 6),
               _CoefChip('覆盖', cov, AppColors.lightTextMuted),
-            ],
-          ),
-        ],
-        // 非选择题：手动对错按钮兜底
-        if (!hasOptions) ...[
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: onCorrect,
-                    icon: const Icon(Icons.check, size: 20),
-                    label: const Text('答对了', style: TextStyle(fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.correct,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: onWrong,
-                    icon: const Icon(Icons.close, size: 20),
-                    label: const Text('答错了', style: TextStyle(fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.wrong,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ],

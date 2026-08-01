@@ -73,7 +73,7 @@ class QuestionCard extends StatelessWidget {
                       ),
                   ] else ...[
                     const Text(
-                      '（该题为非选择题，请在答案页参考答案后自评对错）',
+                      '（该题暂无选项，下滑查看答案后继续下一题）',
                       style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
                     ),
                   ],
