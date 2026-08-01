@@ -200,11 +200,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }
 
     // 创建科目和知识点
+    final subjectRepo = SubjectRepository();
+    final kpRepo = KpRepository();
+    final kpStateRepo = KpStateRepository();
+
     if (_selectedIdentity != null) {
       final presets = presetSubjectsFor(_selectedIdentity!);
-      final subjectRepo = SubjectRepository();
-      final kpRepo = KpRepository();
-      final kpStateRepo = KpStateRepository();
 
       for (final preset in presets) {
         // 只创建用户勾选了的科目（subjectProgress 中包含的）
@@ -312,7 +313,7 @@ class _StepAiConfig extends StatelessWidget {
                 // 模型选择
                 if (selectedVendorId != null && availableModels.isNotEmpty) ...[
                   Text('选择模型', style: t.titleMedium),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -328,10 +329,10 @@ class _StepAiConfig extends StatelessWidget {
                     )).toList(),
                   ),
                 ],
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 // API Key 输入
                 Text('API Key', style: t.titleMedium),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 TextField(
                   decoration: InputDecoration(
                     hintText: '粘贴 API Key',
@@ -348,11 +349,11 @@ class _StepAiConfig extends StatelessWidget {
                   onChanged: (v) => onKeyChanged?.call(v),
                 ),
                 if (apiKey != null && apiKey!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Row(
                     children: [
                       Icon(Icons.check_circle, color: AppColors.correct, size: 16),
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       Text('Key 已配置（仅存本地）', style: TextStyle(color: AppColors.correct, fontSize: 13)),
                     ],
                   ),
@@ -530,12 +531,12 @@ class _StepSubjectsState extends State<_StepSubjects> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: _ProgressDots(count: 4, current: 2),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           // ───────── 卡片内滚动区域（卡中卡核心） ─────────
           Expanded(
             child: Container(
@@ -604,14 +605,14 @@ class _StepSubjectsState extends State<_StepSubjects> {
                       if (widget.aiLoading) ...[
                         const Divider(height: 24),
                         Text('🤖 AI 正在推荐...', style: t.labelLarge),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         LinearProgressIndicator(color: AppColors.primary),
                       ],
 
                       // 自定义添加
                       const Divider(height: 24),
                       Text('✏️ 自定义', style: t.titleMedium),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -828,7 +829,7 @@ class _VendorCard extends StatelessWidget {
                   ),
                   child: const Text('推荐', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
               ],
               Expanded(
                 child: Column(
@@ -1036,12 +1037,12 @@ class _AgentPrepBanner extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
+            SizedBox(
               width: 12,
               height: 12,
               child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Flexible(
               child: Text(
                 '学习环境准备中 $pct%',

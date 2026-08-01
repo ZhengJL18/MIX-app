@@ -124,7 +124,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(Icons.info_outline, color: AppColors.primary, size: 18),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '这里配置的模型会同时用于「刷题出题」「AI 对话」和本地 Hermes Agent，三处共用同一个模型与 Key。',
@@ -134,10 +134,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
 
                 // ── 厂商选择 ──
-                const Text('AI 厂商',
+                Text('AI 厂商',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
@@ -152,41 +152,41 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     setState(() => _vendorId = id!);
                   },
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
 
                 // ── 模型 ──
-                const Text('模型',
+                Text('模型',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 TextField(
                   controller: _modelCtrl,
                   decoration: _fieldDecoration(_isCustom ? '如 my-model' : '如 ${_preset?.models.first}'),
                 ),
                 if (_preset != null) ...[
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   Text(
                     '推荐：${_preset!.models.join('、')}',
                     style: TextStyle(fontSize: 12, color: AppColors.lightTextMuted),
                   ),
                 ],
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
 
                 // ── Base URL（仅自定义厂商） ──
                 if (_isCustom) ...[
-                  const Text('Base URL',
+                  Text('Base URL',
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   TextField(
                     controller: _baseUrlCtrl,
                     decoration: _fieldDecoration('如 https://api.example.com/v1'),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                 ],
 
                 // ── API Key ──
-                const Text('API Key',
+                Text('API Key',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 TextField(
                   controller: _keyCtrl,
                   obscureText: _obscureKey,
@@ -200,7 +200,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: 32),
 
                 // ── 保存 ──
                 SizedBox(

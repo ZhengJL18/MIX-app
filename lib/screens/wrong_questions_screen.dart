@@ -100,10 +100,10 @@ class _WrongQuestionCard extends StatelessWidget {
                   color: AppColors.wrong.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text('错题',
+                child: Text('错题',
                     style: TextStyle(color: AppColors.wrong, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '${q['subject_name']} · ${q['kp_name']}',
@@ -113,13 +113,13 @@ class _WrongQuestionCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           RichContent(
             content: q['content'] as String? ?? '',
             style: TextStyle(color: AppColors.lightText, fontSize: 15, height: 1.6),
           ),
           if (options.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             for (var i = 0; i < options.length; i++)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -133,7 +133,7 @@ class _WrongQuestionCard extends StatelessWidget {
                 ),
               ),
           ],
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(10),
@@ -147,7 +147,7 @@ class _WrongQuestionCard extends StatelessWidget {
             ),
           ),
           if ((q['explanation'] as String? ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             RichContent(
               content: '解析：${q['explanation']}',
               style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.5),

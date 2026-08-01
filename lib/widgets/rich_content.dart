@@ -145,7 +145,7 @@ class _SafeMath extends StatelessWidget {
           color: AppColors.primary,
           fontWeight: FontWeight.w600,
         ) ??
-        const TextStyle(
+        TextStyle(
           color: AppColors.primary,
           fontSize: 15,
           fontWeight: FontWeight.w600,

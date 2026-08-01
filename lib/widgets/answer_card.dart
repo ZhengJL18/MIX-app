@@ -43,7 +43,7 @@ class AnswerCard extends StatelessWidget {
             selected: selectedOption,
             answer: answer,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
         ],
         // 参考答案
         Container(
@@ -60,7 +60,7 @@ class AnswerCard extends StatelessWidget {
               Row(
                 children: [
                   Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 18),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                   Text('参考答案',
                       style: TextStyle(
                         color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15,
@@ -77,12 +77,12 @@ class AnswerCard extends StatelessWidget {
         ),
         // 解析
         if (explanation.isNotEmpty) ...[
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Text('解析', style: t.titleMedium?.copyWith(fontSize: 15)),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           RichContent(
             content: explanation,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.lightTextMuted,
               height: 1.5,
               fontSize: 14,
@@ -91,21 +91,21 @@ class AnswerCard extends StatelessWidget {
         ],
         // 四维系数
         if (cplx != null || und != null || red != null || cov != null) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Row(
             children: [
               Text('出题参考系数：', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted)),
             ],
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Row(
             children: [
               _CoefChip('复杂度', cplx, AppColors.primary),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               _CoefChip('理解', und, AppColors.secondary),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               _CoefChip('冗余', red, AppColors.accent),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               _CoefChip('覆盖', cov, AppColors.lightTextMuted),
             ],
           ),
@@ -172,21 +172,21 @@ class _ResultBanner extends StatelessWidget {
           Row(
             children: [
               Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(title,
                   style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
             ],
           ),
           if (answered && !isCorrect) ...[
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text('你的答案：$selected',
                 style: TextStyle(color: AppColors.lightText, fontSize: 13)),
-            const SizedBox(height: 2),
+            SizedBox(height: 2),
             Text('正确答案：$answer',
                 style: TextStyle(color: AppColors.lightText, fontSize: 13)),
           ],
           if (answered && isCorrect) ...[
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text('你的答案：$selected',
                 style: TextStyle(color: AppColors.lightText, fontSize: 13)),
           ],

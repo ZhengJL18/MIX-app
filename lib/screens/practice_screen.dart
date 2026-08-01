@@ -333,7 +333,7 @@ class _AnswerDetailPage extends StatelessWidget {
                     onMinorCauseChanged: onMinorCauseChanged,
                   ),
                 ],
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
                 // 「下一题」按钮 — 明确进入下一题，避免滑到即提交导致解析一闪而过
                 SizedBox(
                   width: double.infinity,
@@ -371,13 +371,13 @@ class _LoadingView extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(color: AppColors.primary),
-          const SizedBox(height: 16),
-          const Text(
+          SizedBox(height: 16),
+          Text(
             'AI 正在生成题目...',
             style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
           ),
           if (streamingText.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Expanded(
               child: SingleChildScrollView(
                 child: RichContent(
@@ -411,7 +411,7 @@ class _StatusBar extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('刷题模式 · 单选题',
+            child: Text('刷题模式 · 单选题',
                 style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
@@ -436,7 +436,7 @@ class _ErrorView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.info_outline, size: 48, color: AppColors.lightTextMuted),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center, style: TextStyle(color: AppColors.lightTextMuted)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: onRetry, child: const Text('重试')),

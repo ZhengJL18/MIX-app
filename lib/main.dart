@@ -236,7 +236,7 @@ class _MainShellState extends State<_MainShell> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.auto_awesome, color: AppColors.primary, size: 22),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 Text('Mix',
                     style: TextStyle(
                         color: AppColors.lightText,
@@ -325,7 +325,7 @@ class _MainShellState extends State<_MainShell> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               width: 40,
               height: 4,
@@ -361,7 +361,7 @@ class _MainShellState extends State<_MainShell> {
               Navigator.of(ctx).pop();
               _openThemePicker(context);
             }),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
           ],
         ),
       ),
@@ -394,7 +394,7 @@ class _MainShellState extends State<_MainShell> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 16, color: active ? AppColors.primary : AppColors.lightTextMuted),
-            const SizedBox(width: 4),
+            SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
                     color: active ? AppColors.primary : AppColors.lightTextMuted,
@@ -421,17 +421,17 @@ class _AgentProgressOverlay extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.auto_awesome, color: AppColors.primary, size: 48),
-            const SizedBox(height: 20),
-            const Text(
+            SizedBox(height: 20),
+            Text(
               '正在初始化学习环境...',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.lightText),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '首次启动需解压内置 AI 引擎（只需一次）',
               style: TextStyle(fontSize: 13, color: AppColors.lightTextMuted),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             // 进度条
             Container(
               width: 260,
@@ -451,7 +451,7 @@ class _AgentProgressOverlay extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Text(
               '$percent% · $status',
               style: TextStyle(fontSize: 13, color: AppColors.lightTextMuted),
@@ -734,7 +734,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                   size: 14,
                   color: AppColors.lightTextMuted,
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     s.text,
@@ -768,7 +768,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                         : widget.agent.hasFailed
                             ? AppColors.wrong
                             : AppColors.lightTextMuted),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     widget.agent.isRunning
@@ -788,7 +788,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                         color: AppColors.wrong.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text('重试',
+                      child: Text('重试',
                           style: TextStyle(color: AppColors.wrong, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                   ),
@@ -804,7 +804,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.chat_bubble_outline, color: AppColors.lightTextMuted, size: 56),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
                         Text('问我任何学习问题',
                             style: TextStyle(color: AppColors.lightTextMuted, fontSize: 16)),
                       ],
@@ -842,7 +842,7 @@ class _ChatScreenState extends State<_ChatScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 GestureDetector(
                   onTap: _sending
                       ? _stopStreaming
@@ -916,20 +916,20 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                               ? AppColors.secondary
                               : AppColors.correct,
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         b.toolLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.lightTextMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     if (b.isRunning)
-                      const SizedBox(
+                      SizedBox(
                         width: 10,
                         height: 10,
                         child: CircularProgressIndicator(strokeWidth: 2),
@@ -1023,7 +1023,7 @@ class _FilesScreenState extends State<_FilesScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
                       ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _InfoCard(
             icon: Icons.tune,
             title: 'AI 模型配置',
@@ -1036,7 +1036,7 @@ class _FilesScreenState extends State<_FilesScreen> {
               size: 20,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _InfoCard(
             icon: Icons.storage,
             title: '数据存储',
@@ -1075,14 +1075,14 @@ class _InfoCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: AppColors.primary, size: 24),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
                     style: TextStyle(color: AppColors.lightText, fontSize: 15, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(subtitle,
                     style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.4)),
               ],

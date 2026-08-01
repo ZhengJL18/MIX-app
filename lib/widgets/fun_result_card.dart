@@ -36,7 +36,7 @@ class _FunResultCardState extends State<FunResultCard> {
   FunContent get _content {
     switch (widget.type) {
       case FunResultType.skip:
-        return const FunContent(
+        return FunContent(
           imageAsset: 'assets/memes/skip.png',
           emoji: '🤔',
           tagline: '还没做题怎么能看答案呢，高低蒙一个啊喂！',
@@ -45,14 +45,14 @@ class _FunResultCardState extends State<FunResultCard> {
         );
       case FunResultType.correct:
         return _useVariantB
-            ? const FunContent(
+            ? FunContent(
                 imageAsset: 'assets/memes/correct2.png',
                 emoji: '💪',
                 tagline: '如此强劲！',
                 subText: '回答正确',
                 accentColor: AppColors.correct,
               )
-            : const FunContent(
+            : FunContent(
                 imageAsset: 'assets/memes/correct1.png',
                 emoji: '🎉',
                 tagline: '斯国一！',
@@ -61,14 +61,14 @@ class _FunResultCardState extends State<FunResultCard> {
               );
       case FunResultType.wrong:
         return _useVariantB
-            ? const FunContent(
+            ? FunContent(
                 imageAsset: 'assets/memes/wrong2.png',
                 emoji: '😬',
                 tagline: '欸呀欸呀，做错了吗？',
                 subText: '回答错误',
                 accentColor: AppColors.wrong,
               )
-            : const FunContent(
+            : FunContent(
                 imageAsset: 'assets/memes/wrong1.png',
                 emoji: '🙃',
                 tagline: '啊咧咧？',
@@ -134,7 +134,7 @@ class _FunResultCardState extends State<FunResultCard> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             '下滑${widget.type == FunResultType.skip ? '跳过本题' : '查看解析'} ➡',
             style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),

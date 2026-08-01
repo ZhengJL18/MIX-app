@@ -57,7 +57,7 @@ class QuestionCard extends StatelessWidget {
                     content: question['content'] as String? ?? '',
                     style: t.bodyLarge?.copyWith(fontSize: 18, height: 1.7),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   // 选项
                   if (options.isNotEmpty) ...[
                     Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
@@ -72,7 +72,7 @@ class QuestionCard extends StatelessWidget {
                         ),
                       ),
                   ] else ...[
-                    const Text(
+                    Text(
                       '（该题暂无选项，下滑查看答案后继续下一题）',
                       style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
                     ),
@@ -154,7 +154,7 @@ class _OptionButton extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: RichContent(
                   content: option,

@@ -6,6 +6,7 @@ import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
 import '../repository/practice_repository.dart';
 import '../repository/subject_repository.dart';
+import '../theme/app_colors.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -39,8 +40,8 @@ class _StatsScreenState extends State<StatsScreen> {
     for (final subj in subjects) {
       // 该科目是否有做题记录（决定显示真实掌握度还是"未开始"）
       final hasRecords = await _practiceRepo.hasRecordsForSubject(
-        userId: kLocalUserId,
-        subjectId: subj['id'] as int,
+        kLocalUserId,
+        subj['id'] as int,
       );
 
       if (!hasRecords) {
