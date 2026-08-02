@@ -77,7 +77,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
     setState(() => _streamingText = accumulated);
   }
 
-  _AnswerState get _state(int idx) => _answerStates[idx] ?? _AnswerState.unanswered;
+  _AnswerState _state(int idx) => _answerStates[idx] ?? _AnswerState.unanswered;
 
   void _onOptionSelected(int idx, String? option) {
     final appState = context.read<AppState>();
@@ -160,8 +160,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   scrollDirection: Axis.vertical,
                   physics: const _TikTokPhysics(),
                   itemCount: questions.length,
-                  // 前3后5缓存：PageView 预渲染相邻页，滑动不卡顿
-                  cacheExtent: 5,
+                  // 预渲染相邻页（前3后5缓存），滑动不卡顿
+                  allowImplicitScrolling: true,
                   itemBuilder: (context, idx) {
                     return _QuestionPage(
                       key: ValueKey('q-$idx'),
@@ -301,9 +301,9 @@ class _LoadingView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: AppColors.primary),
+          CircularProgressIndicator(color: AppColors.primary),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'AI 正在生成题目...',
             style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
           ),
@@ -313,7 +313,7 @@ class _LoadingView extends StatelessWidget {
               child: SingleChildScrollView(
                 child: RichContent(
                   content: streamingText,
-                  style: const TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.5),
+                  style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.5),
                 ),
               ),
             ),
@@ -342,7 +342,7 @@ class _StatusBar extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('刷题 · 连续流',
+            child: Text('刷题 · 连续流',
                 style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
