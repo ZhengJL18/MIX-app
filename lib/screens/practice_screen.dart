@@ -148,7 +148,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
           );
         }
 
-        // 用队列长度做 PageView。每页一道题的完整内容（纵向滚动）。
+        // 连续流：每道题 3 个阶段页（题目 → 趣味评价 → 答案解析），
+        // 全部连成一条 PageView。下滑从题目自然翻到答案，再翻到下一题题目。
+        // 每题 3 页：questionIndex * 3 + 0(题目) / +1(趣味) / +2(答案)
+        final totalPages = questions.length * 3;
+
         return Container(
           color: AppColors.lightBg,
           child: Column(
@@ -159,33 +163,85 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   controller: _pageCtrl,
                   scrollDirection: Axis.vertical,
                   physics: const _TikTokPhysics(),
-                  itemCount: questions.length,
+                  itemCount: totalPages,
                   // 预渲染相邻页（前3后5缓存），滑动不卡顿
                   allowImplicitScrolling: true,
-                  itemBuilder: (context, idx) {
-                    return _QuestionPage(
-                      key: ValueKey('q-$idx'),
-                      question: questions[idx],
-                      answerState: _state(idx),
-                      selectedOption: _selectedOptions[idx],
-                      mainCause: _mainCauses[idx],
-                      minorCause: _minorCauses[idx],
-                      hasOptions: _hasOptions(questions[idx]['options']),
-                      onOptionSelected: (opt) => _onOptionSelected(idx, opt),
-                      onMainCauseChanged: (c) => setState(() => _mainCauses[idx] = c),
-                      onMinorCauseChanged: (c) => setState(() => _minorCauses[idx] = c),
-                      onAdvance: () {
-                        // 滑动离开本题 → 提交（若已作答）
-                        if (_state(idx) != _AnswerState.unanswered) {
-                          _submit(idx);
+                  itemBuilder: (context, page) {
+                    final qIdx = page ~/ 3;
+                    final phase = page % 3;
+                    final q = qIdx < questions.length ? questions[qIdx] : null;
+                    if (q == null) return const SizedBox.shrink();
+
+                    final state = _state(qIdx);
+                    final answered = state != _AnswerState.unanswered;
+
+                    switch (phase) {
+                      case 0: // 题目页
+                        return _FullPage(
+                          child: QuestionCard(
+                            question: q,
+                            selectedOption: _selectedOptions[qIdx],
+                            onOptionSelected: (opt) => _onOptionSelected(qIdx, opt),
+                            compact: true,
+                          ),
+                        );
+                      case 1: // 趣味评价页
+                        return _FullPage(
+                          child: FunResultCard(
+                            type: state == _AnswerState.correct
+                                ? FunResultType.correct
+                                : state == _AnswerState.wrong
+                                    ? FunResultType.wrong
+                                    : FunResultType.skip,
+                          ),
+                        );
+                      case 2: // 答案+解析页（未作答显示趣味评价替代）
+                      default:
+                        if (!answered) {
+                          // 未作答：滑过趣味页直接到下一题题目（不展示答案）
+                          return _FullPage(
+                            child: Center(
+                              child: Text(
+                                '还没做题呢，下滑跳过本题 ➡',
+                                style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
+                              ),
+                            ),
+                          );
                         }
-                      },
-                    );
+                        return _FullPage(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AnswerCard(
+                                question: q,
+                                selectedOption: _selectedOptions[qIdx],
+                                isCorrect: state == _AnswerState.correct,
+                              ),
+                              if (state == _AnswerState.wrong && _hasOptions(q['options'])) ...[
+                                const SizedBox(height: 8),
+                                FeedbackCard(
+                                  mainCause: _mainCauses[qIdx],
+                                  minorCause: _minorCauses[qIdx],
+                                  onMainCauseChanged: (c) => setState(() => _mainCauses[qIdx] = c),
+                                  onMinorCauseChanged: (c) => setState(() => _minorCauses[qIdx] = c),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                    }
                   },
                   onPageChanged: (page) {
+                    final qIdx = page ~/ 3;
                     // 切题：移动游标，触发后台预生成下一批
-                    appState.moveCursor(page);
-                    if (page > 0) _submit(page - 1); // 提交上一题
+                    appState.moveCursor(qIdx);
+                    // 离开一题的答案页（phase 2）进入下一题 → 提交该题
+                    if (page % 3 == 0 && page > 0) {
+                      final prevIdx = page ~/ 3 - 1;
+                      if (_state(prevIdx) != _AnswerState.unanswered) {
+                        _submit(prevIdx);
+                      }
+                    }
                   },
                 ),
               ),
@@ -197,92 +253,19 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 }
 
-/// 一道题的完整页：题目(选项) → 趣味结果 → 答案+解析（纵向滚动）。
-class _QuestionPage extends StatelessWidget {
-  final Map<String, dynamic> question;
-  final _AnswerState answerState;
-  final String? selectedOption;
-  final String? mainCause;
-  final String? minorCause;
-  final bool hasOptions;
-  final ValueChanged<String?> onOptionSelected;
-  final ValueChanged<String?> onMainCauseChanged;
-  final ValueChanged<String?> onMinorCauseChanged;
-  final VoidCallback onAdvance;
-
-  const _QuestionPage({
-    super.key,
-    required this.question,
-    required this.answerState,
-    required this.selectedOption,
-    required this.mainCause,
-    required this.minorCause,
-    required this.hasOptions,
-    required this.onOptionSelected,
-    required this.onMainCauseChanged,
-    required this.onMinorCauseChanged,
-    required this.onAdvance,
-  });
+/// 一页容器 — 内容可滚动（内滚到底再触发 PageView 翻页）。
+class _FullPage extends StatelessWidget {
+  final Widget child;
+  const _FullPage({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final answered = answerState != _AnswerState.unanswered;
-
     return Container(
       color: AppColors.lightBg,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 题目 + 选项（compact 嵌入滚动容器）
-            QuestionCard(
-              question: question,
-              selectedOption: selectedOption,
-              onOptionSelected: onOptionSelected,
-              compact: true,
-            ),
-            const SizedBox(height: 20),
-            // 趣味结果（未作答 = skip，作答 = 对/错）
-            FunResultCard(
-              type: answerState == _AnswerState.correct
-                  ? FunResultType.correct
-                  : answerState == _AnswerState.wrong
-                      ? FunResultType.wrong
-                      : FunResultType.skip,
-              compact: true,
-            ),
-            const SizedBox(height: 20),
-            // 答案 + 解析（已作答才显示）
-            if (answered) ...[
-              AnswerCard(
-                question: question,
-                selectedOption: selectedOption,
-                isCorrect: answerState == _AnswerState.correct,
-              ),
-              // 做错 → 错因反馈
-              if (answerState == _AnswerState.wrong && hasOptions) ...[
-                const SizedBox(height: 8),
-                FeedbackCard(
-                  mainCause: mainCause,
-                  minorCause: minorCause,
-                  onMainCauseChanged: onMainCauseChanged,
-                  onMinorCauseChanged: onMinorCauseChanged,
-                ),
-              ],
-            ],
-            const SizedBox(height: 24),
-            Center(
-              child: Text(
-                answered ? '下滑继续下一题 ➡' : '下滑跳过本题 ➡',
-                style: const TextStyle(color: Color(0xFFA09080), fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
+        child: child,
       ),
     );
   }

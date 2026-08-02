@@ -645,7 +645,10 @@ class _ChatScreenState extends State<_ChatScreen>
     _persistHistory();
     _scrollToBottom();
 
-    if (!hermesUp) {
+    // 云端直连优先：快、真流式，体验最好。Hermes（agent）较慢，
+    // 保留但仅在未配云端 key 时兜底。Hermes 本地就绪也走云端更快。
+    final useCloud = _ai != null;
+    if (useCloud) {
       // Hermes 未就绪时回退外部 AI（同样流式渲染）
       try {
         final textBlock = TextBlock(id: generateBlockId(), isStreaming: true);

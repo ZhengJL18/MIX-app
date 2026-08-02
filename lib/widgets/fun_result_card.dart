@@ -6,14 +6,10 @@ import '../theme/app_colors.dart';
 /// 趣味结果类型
 enum FunResultType { skip, correct, wrong }
 
-/// 趣味结果页 — 做题后下滑第一屏看到的趣味化反馈。
+/// 趣味结果页 — 做题后第一屏看到的趣味化反馈。
 ///
-/// 在正常对错提示之上叠加表情包 + 配文，让刷题更有趣味：
-/// - 未做（skip）：鼓励先蒙一个再对答案，下滑 = 跳过本题
-/// - 做对（correct）：斯国一！ / 如此强劲！ 二选一
-/// - 做错（wrong）：啊咧咧？ / 欸呀欸呀，做错了吗？ 二选一
-///
-/// 图片从 assets/memes/ 加载，缺失时用 emoji 兜底，不阻塞显示。
+/// 每类（对/错/跳过）有多张图，随机挑一张，配文 = 图片文件名。
+/// 图片来自用户提供的 assets/memes/，缺失时用 emoji 兜底。
 class FunResultCard extends StatefulWidget {
   final FunResultType type;
 
@@ -27,58 +23,49 @@ class FunResultCard extends StatefulWidget {
 }
 
 class _FunResultCardState extends State<FunResultCard> {
-  // 每次进入固定选择的表情（对/错二选一），避免 rebuild 时随机跳动
-  late final bool _useVariantB;
+  // 每次进入固定选择一张（随机），避免 rebuild 时跳动
+  late final FunContent _content;
 
   @override
   void initState() {
     super.initState();
-    _useVariantB = Random().nextBool();
+    _content = _pickContent(widget.type);
   }
 
-  FunContent get _content {
-    switch (widget.type) {
+  /// 按情境随机选一张图。
+  static FunContent _pickContent(FunResultType type) {
+    final random = Random();
+    switch (type) {
       case FunResultType.skip:
-        return FunContent(
-          imageAsset: 'assets/memes/skip.png',
-          emoji: '🤔',
-          tagline: '还没做题怎么能看答案呢，高低蒙一个啊喂！',
-          subText: '下滑可跳过本题',
-          accentColor: AppColors.lightTextMuted,
-        );
+        final pool = [
+          _fc('skip_weizuowan', '诶呀还没做完呢', '下滑可跳过本题', AppColors.lightTextMuted, '🤔'),
+        ];
+        return pool[random.nextInt(pool.length)];
       case FunResultType.correct:
-        return _useVariantB
-            ? FunContent(
-                imageAsset: 'assets/memes/correct2.png',
-                emoji: '💪',
-                tagline: '如此强劲！',
-                subText: '回答正确',
-                accentColor: AppColors.correct,
-              )
-            : FunContent(
-                imageAsset: 'assets/memes/correct1.png',
-                emoji: '🎉',
-                tagline: '斯国一！',
-                subText: '回答正确',
-                accentColor: AppColors.correct,
-              );
+        final pool = [
+          _fc('correct_tiancai', '天才！', '回答正确', AppColors.correct, '🎉'),
+          _fc('correct_zhenbang', '真棒', '回答正确', AppColors.correct, '💪'),
+          _fc('correct_wenzhenbang', '我真棒', '回答正确', AppColors.correct, '😎'),
+          _fc('correct_qiangqiang', '！？强强？！', '回答正确', AppColors.correct, '🔥'),
+        ];
+        return pool[random.nextInt(pool.length)];
       case FunResultType.wrong:
-        return _useVariantB
-            ? FunContent(
-                imageAsset: 'assets/memes/wrong2.png',
-                emoji: '😬',
-                tagline: '欸呀欸呀，做错了吗？',
-                subText: '回答错误',
-                accentColor: AppColors.wrong,
-              )
-            : FunContent(
-                imageAsset: 'assets/memes/wrong1.png',
-                emoji: '🙃',
-                tagline: '啊咧咧？',
-                subText: '回答错误',
-                accentColor: AppColors.wrong,
-              );
+        final pool = [
+          _fc('wrong_alie', '啊咧，错了吗', '回答错误', AppColors.wrong, '🙃'),
+          _fc('wrong_ah', '啊！错了！', '回答错误', AppColors.wrong, '😬'),
+        ];
+        return pool[random.nextInt(pool.length)];
     }
+  }
+
+  static FunContent _fc(String name, String tagline, String sub, Color color, String emoji) {
+    return FunContent(
+      imageAsset: 'assets/memes/$name.png',
+      emoji: emoji,
+      tagline: tagline,
+      subText: sub,
+      accentColor: color,
+    );
   }
 
   @override
@@ -111,7 +98,7 @@ class _FunResultCardState extends State<FunResultCard> {
             ),
           ),
           const SizedBox(height: 28),
-          // 趣味配文
+          // 趣味配文（图片名）
           Text(
             c.tagline,
             style: TextStyle(
