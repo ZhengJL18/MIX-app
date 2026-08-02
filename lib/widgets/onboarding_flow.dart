@@ -118,11 +118,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           setState(() => _subjectProgress[subject] = stop);
         },
         onAddCustom: (name) {
-          setState(() => _customSubjects.add(name));
+          setState(() {
+            if (!_customSubjects.contains(name)) {
+              _customSubjects.add(name);
+            }
+          });
+        },
+        onRemoveCustom: (name) {
+          setState(() {
+            _customSubjects.remove(name);
+            _subjectProgress.remove(name);
+          });
         },
       ),
       _StepComplete(
-        subjectCount: _subjectProgress.length + _customSubjects.length,
+        // 自定义科目也写入了 _subjectProgress（onProgressChanged），
+        // 只数 _subjectProgress 避免重复计数（预设勾选 + 自定义）
+        subjectCount: _subjectProgress.length,
         vendorName: _selectedVendorId,
         onFinish: _onFinish,
       ),
@@ -454,6 +466,7 @@ class _StepSubjects extends StatefulWidget {
   final bool aiLoading;
   final void Function(String subject, int stopIndex) onProgressChanged;
   final ValueChanged<String> onAddCustom;
+  final ValueChanged<String> onRemoveCustom;
 
   const _StepSubjects({
     required this.identity,
@@ -463,6 +476,7 @@ class _StepSubjects extends StatefulWidget {
     required this.aiLoading,
     required this.onProgressChanged,
     required this.onAddCustom,
+    required this.onRemoveCustom,
   });
 
   @override
@@ -652,6 +666,20 @@ class _StepSubjectsState extends State<_StepSubjects> {
                           ),
                         ],
                       ),
+
+                      // 已添加的自定义科目（带删除，避免"添加了却看不到"）
+                      if (widget.customSubjects.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: widget.customSubjects.map((name) => InputChip(
+                            label: Text(name),
+                            onDeleted: () => widget.onRemoveCustom(name),
+                            deleteIconColor: AppColors.wrong,
+                          )).toList(),
+                        ),
+                      ],
 
                       const SizedBox(height: 40),
                     ],
