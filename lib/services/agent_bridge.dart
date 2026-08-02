@@ -26,6 +26,7 @@ class AgentBridge {
   bool _initialized = false;
   bool _failed = false;
   bool _starting = false; // 防重入：解压/启动过程中多次 start() 只执行一次
+  Completer<void>? _startCompleter; // 进行中的 start()，供重入调用等待
 
   /// Hermes api_server 的 Bearer 认证 key（API_SERVER_KEY）。
   /// 无 key 时 api_server 拒绝启动；Hermes 0.15.2 要求长度 >= 16 字符，
@@ -84,8 +85,22 @@ class AgentBridge {
   }
 
   /// 启动 Hermes 子进程。
+  ///
+  /// 可重入安全：若已有启动在进行，等待同一个 Completer，保证
+  /// 同一时刻只拉一个 gateway 进程（Hermes 检测到双实例会退出）。
   Future<void> start() async {
-    if (_running || _starting) return;
+    // 已在运行或正在启动 → 等待进行中的那次完成，不重复拉进程
+    if (_running) return;
+    if (_starting) {
+      final pending = _startCompleter;
+      if (pending != null) {
+        await pending.future;
+        return;
+      }
+    }
+
+    final completer = Completer<void>();
+    _startCompleter = completer;
     _starting = true;
     _failed = false;
 
@@ -95,6 +110,8 @@ class AgentBridge {
       });
     } catch (e) {
       _starting = false;
+      _startCompleter = null;
+      completer.complete();
       debugPrint('[AgentBridge] ensureInitialized 失败: $e');
       _failed = true;
       _controller.add(AgentBridgeError('初始化失败', 'Hermes 环境解压失败: $e'));
@@ -112,6 +129,8 @@ class AgentBridge {
       _running = true;
       _failed = false;
       _starting = false;
+      _startCompleter = null;
+      completer.complete();
       _controller.add(AgentBridgeStatus('agent_ready', 'Hermes 已就绪'));
       return;
     }
@@ -191,6 +210,8 @@ class AgentBridge {
       _controller.add(AgentBridgeError('启动失败', 'Hermes Agent 启动失败: $e'));
     } finally {
       _starting = false;
+      _startCompleter = null;
+      if (!completer.isCompleted) completer.complete();
     }
   }
 
