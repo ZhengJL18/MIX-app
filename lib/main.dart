@@ -654,6 +654,8 @@ class _ChatScreenState extends State<_ChatScreen>
           if (!mounted) return;
           textBlock.append(delta);
           setState(() => _upsertBlock(textBlock));
+          // 每个 chunk 都持久化：流式到一半被杀，已显示文本不丢
+          _persistHistory();
           _scrollToBottom();
         }
         if (mounted) {
@@ -693,6 +695,8 @@ class _ChatScreenState extends State<_ChatScreen>
         (block) {
           if (!mounted) return;
           setState(() => _upsertBlock(block));
+          // 每个块持久化：流式到一半退出，已显示文本不丢（途径A冻结）
+          _persistHistory();
           _scrollToBottom();
         },
         onDone: _onStreamDone,
