@@ -609,14 +609,21 @@ class _ChatScreenState extends State<_ChatScreen>
     _scrollToBottom();
 
     if (!hermesUp) {
-      // Hermes 未就绪时回退外部 AI
+      // Hermes 未就绪时回退外部 AI（同样流式渲染）
       try {
-        final reply = await _ai!.chat(text);
-        if (!mounted) return;
-        setState(() {
-          _messages.add(TextBlock(id: generateBlockId(), content: reply));
+        final textBlock = TextBlock(id: generateBlockId(), isStreaming: true);
+        setState(() => _messages.add(textBlock));
+        await for (final delta in _ai!.chatStream(text)) {
+          if (!mounted) return;
+          textBlock.append(delta);
+          setState(() => _upsertBlock(textBlock));
+          _scrollToBottom();
+        }
+        if (mounted) {
+          textBlock.finish();
+          setState(() => _upsertBlock(textBlock));
           _sending = false;
-        });
+        }
         _persistHistory();
       } catch (e) {
         if (!mounted) return;

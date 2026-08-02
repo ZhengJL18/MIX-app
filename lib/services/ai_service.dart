@@ -76,6 +76,50 @@ class OpenAiCompatibleAiService implements AiService {
     return data['choices']?[0]?['message']?['content'] as String? ?? '';
   }
 
+  /// 流式对话（OpenAI SSE）。Hermes 未就绪时云端直连也走流式渲染。
+  Stream<String> chatStream(String prompt) async* {
+    final request = http.Request('POST', Uri.parse(baseUrl))
+      ..headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      })
+      ..body = jsonEncode({
+        'model': model,
+        'max_tokens': 2048,
+        'stream': true,
+        'messages': [
+          {'role': 'system', 'content': '你是 MIX 学习助手，一个 AI 学习教练。用中文简洁回答。'},
+          {'role': 'user', 'content': prompt},
+        ],
+      });
+
+    final response = await http.Client().send(request);
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      throw Exception('AI 对话失败: ${response.statusCode} $body');
+    }
+
+    var buffer = '';
+    await for (final chunk in utf8.decoder.bind(response.stream)) {
+      buffer += chunk;
+      while (buffer.contains('\n')) {
+        final lineEnd = buffer.indexOf('\n');
+        final line = buffer.substring(0, lineEnd).trim();
+        buffer = buffer.substring(lineEnd + 1);
+
+        if (!line.startsWith('data: ')) continue;
+        final data = line.substring(6);
+        if (data == '[DONE]') return;
+
+        try {
+          final json = jsonDecode(data) as Map<String, dynamic>;
+          final delta = json['choices']?[0]?['delta']?['content'] as String?;
+          if (delta != null && delta.isNotEmpty) yield delta;
+        } catch (_) {}
+      }
+    }
+  }
+
   @override
   Future<GeneratedQuestion> generateQuestion(String prompt) async {
     final body = jsonEncode({

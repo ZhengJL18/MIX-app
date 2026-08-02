@@ -126,45 +126,44 @@ class AgentBridge {
     final filesDir = await _getFilesDir();
     // Hermes gateway api_server 固定端口 8642（见 api_server.py DEFAULT_PORT）
     _port = 8642;
+    final hermesHome = '$filesDir/.hermes';
 
-    // 若端口已被监听（gateway 已在跑，例如重复 start() 或上次残留），
-    // 直接复用，不再拉第二个进程（否则 Hermes 检测到双实例会退出）。
+    // 走到这里说明是全新启动（_running/_starting 都已短路），
+    // 若端口还有旧 gateway 监听（App 崩溃/重装后残留的孤儿进程），
+    // 直接杀掉 + 清锁，重新拉一个干净的。否则 Hermes 检测到旧实例
+    // 主动退出，或 App 复用无法管理的孤儿进程导致状态异常。
     if (await _isPortListening(_port)) {
-      debugPrint('[AgentBridge] gateway 已在运行，直接复用端口 $_port');
-      _running = true;
-      _failed = false;
-      _starting = false;
-      _startCompleter = null;
-      completer.complete();
-      _controller.add(AgentBridgeStatus('agent_ready', 'Hermes 已就绪'));
-      return;
+      debugPrint('[AgentBridge] 检测到残留 gateway，清理后重启');
+      try {
+        final pidFile = File('$hermesHome/gateway.pid');
+        if (await pidFile.exists()) {
+          final pid = int.tryParse((await pidFile.readAsString()).trim());
+          if (pid != null) {
+            await Process.run('kill', ['-9', '$pid']);
+          }
+        }
+      } catch (e) {
+        debugPrint('[AgentBridge] 杀残留 gateway 失败: $e');
+      }
+      // 清锁，稍等端口释放
+      for (final name in ['gateway.lock', 'gateway.pid']) {
+        final f = File('$hermesHome/$name');
+        if (await f.exists()) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
+      }
+      await Future.delayed(const Duration(seconds: 2));
     }
 
     try {
       final pythonBin = '${filesDir}/python/python3.14';
       final pkgDir = '${filesDir}/python-packages';
       final srcDir = '${filesDir}/hermes-source';
-      final hermesHome = '$filesDir/.hermes';
 
       // 把 App 的 AI 配置同步给 Hermes（同一份模型/provider/key）
       await _writeHermesAiConfig();
-
-      // 清掉 gateway 残留锁/pid 文件（上次崩溃或卸载残留的旧 PID），
-      // 否则 Hermes 启动时读到旧锁误判"已有实例"主动退出
-      // （日志: Another gateway instance...Exiting to avoid double-running）。
-      final hermesLockDir = Directory('$hermesHome');
-      if (await hermesLockDir.exists()) {
-        for (final name in ['gateway.lock', 'gateway.pid']) {
-          final f = File('$hermesHome/$name');
-          if (await f.exists()) {
-            try {
-              await f.delete();
-            } catch (e) {
-              debugPrint('[AgentBridge] 清理 gateway 锁失败 $name: $e');
-            }
-          }
-        }
-      }
 
       // Hermes 0.15.2 通过 gateway 暴露 OpenAI 兼容 API（/v1/chat/completions）。
       // 端口由 api_server 的 DEFAULT_PORT=8642 决定，agent_bridge 从 /health 读取。
