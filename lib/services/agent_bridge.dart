@@ -90,15 +90,20 @@ class AgentBridge {
   /// 同一时刻只拉一个 gateway 进程（Hermes 检测到双实例会退出）。
   Future<void> start() async {
     // 已在运行或正在启动 → 等待进行中的那次完成，不重复拉进程
-    if (_running) return;
+    if (_running) {
+      debugPrint('[AgentBridge] start: 已在运行，跳过');
+      return;
+    }
     if (_starting) {
       final pending = _startCompleter;
       if (pending != null) {
+        debugPrint('[AgentBridge] start: 等待进行中的启动');
         await pending.future;
         return;
       }
     }
 
+    debugPrint('[AgentBridge] start: 开始全新启动');
     final completer = Completer<void>();
     _startCompleter = completer;
     _starting = true;
@@ -143,6 +148,23 @@ class AgentBridge {
 
       // 把 App 的 AI 配置同步给 Hermes（同一份模型/provider/key）
       await _writeHermesAiConfig();
+
+      // 清掉 gateway 残留锁/pid 文件（上次崩溃或卸载残留的旧 PID），
+      // 否则 Hermes 启动时读到旧锁误判"已有实例"主动退出
+      // （日志: Another gateway instance...Exiting to avoid double-running）。
+      final hermesLockDir = Directory('$hermesHome');
+      if (await hermesLockDir.exists()) {
+        for (final name in ['gateway.lock', 'gateway.pid']) {
+          final f = File('$hermesHome/$name');
+          if (await f.exists()) {
+            try {
+              await f.delete();
+            } catch (e) {
+              debugPrint('[AgentBridge] 清理 gateway 锁失败 $name: $e');
+            }
+          }
+        }
+      }
 
       // Hermes 0.15.2 通过 gateway 暴露 OpenAI 兼容 API（/v1/chat/completions）。
       // 端口由 api_server 的 DEFAULT_PORT=8642 决定，agent_bridge 从 /health 读取。
