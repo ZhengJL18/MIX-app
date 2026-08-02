@@ -506,10 +506,47 @@ class _ChatScreenState extends State<_ChatScreen>
     super.initState();
     _loadAi();
     _loadHistory();
+    _checkResumeTask();
     // 订阅 Hermes 事件，状态变化（失败/就绪）时刷新顶部状态条
     _agentSub = widget.agent.events.listen((_) {
       if (mounted) setState(() {});
     });
+  }
+
+  /// 检查是否有未完成的任务 checkpoint（App 上次被杀时任务在跑），
+  /// 有则恢复对话历史并提示用户可继续。
+  Future<void> _checkResumeTask() async {
+    final cp = await widget.agent.loadCheckpoint();
+    if (cp == null || !mounted) return;
+    final inProgress = cp['in_progress'] == true;
+    final msgs = cp['messages'] as List<dynamic>? ?? [];
+    if (msgs.isEmpty) return;
+
+    // 用 checkpoint 的对话历史填充消息列表（作为恢复基础）
+    final blocks = <MessageBlock>[];
+    var isUser = true; // 交替推断角色
+    for (final m in msgs) {
+      final role = (m as Map)['role'] as String? ?? 'user';
+      final content = (m['content'] as String?) ?? '';
+      if (content.isEmpty) continue;
+      final tb = TextBlock(id: generateBlockId(), content: content);
+      if (role == 'user') _userMsgIds.add(tb.id);
+      blocks.add(tb);
+    }
+    if (blocks.isEmpty) return;
+    setState(() {
+      _messages.insertAll(0, blocks);
+    });
+
+    if (inProgress) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('检测到上次未完成的任务，可继续对话以恢复'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+    _scrollToBottom();
   }
 
   @override

@@ -3,9 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_settings.dart';
 import '../models/message_block.dart';
+
+/// Android 前台服务通道（保活 Hermes 进程）。
+const MethodChannel _hermesServiceChannel =
+    MethodChannel('com.mix.mix_app/hermes_service');
 
 /// Agent 桥接层 — 管理 Hermes 子进程 + HTTP/SSE 通信。
 ///
@@ -215,6 +220,9 @@ class AgentBridge {
       _running = true;
       _failed = false;
 
+      // 拉前台服务保活：Hermes 挂到 foreground，App 退后台进程不被杀
+      await _startForegroundService();
+
       // 进程退出时清理状态
       _process!.exitCode.then((_) {
         _running = false;
@@ -241,6 +249,19 @@ class AgentBridge {
     _process?.kill();
     _process = null;
     _running = false;
+    // 停止前台服务（Hermes 不再需要保活）
+    try {
+      await _hermesServiceChannel.invokeMethod('stopHermesService');
+    } catch (_) {}
+  }
+
+  /// 调起 Android 前台服务，把 Hermes 挂到 foreground 保活。
+  Future<void> _startForegroundService() async {
+    try {
+      await _hermesServiceChannel.invokeMethod('startHermesService');
+    } catch (_) {
+      // 非 Android 或通道不可用 → 忽略（Hermes 仍能跑，只是不保活）
+    }
   }
 
   /// 读取当前 AI 配置（设置页用）。
@@ -326,14 +347,18 @@ class AgentBridge {
     final settings = await AiSettings.load();
     final model =
         (settings != null && settings.model.isNotEmpty) ? settings.model : 'claude-sonnet-4-20250514';
+    final fullMessages = [
+      ...messages,
+      {'role': 'user', 'content': newMessage},
+    ];
     final body = jsonEncode({
       'model': model,
-      'messages': [
-        ...messages,
-        {'role': 'user', 'content': newMessage},
-      ],
+      'messages': fullMessages,
       'stream': true,
     });
+
+    // 任务开始 → 写 checkpoint（App 被杀后据此恢复）
+    await saveCheckpoint(messages: fullMessages, inProgress: true);
 
     // 当前正在累积的文本块 / 工具调用（在 try 外声明以便 catch 能访问）
     TextBlock? currentText;
@@ -445,6 +470,9 @@ class AgentBridge {
         yield currentText;
       }
 
+      // 正常完成 → 清除 checkpoint（任务已完成，无需恢复）
+      await clearCheckpoint();
+
       yield DividerBlock();
 
     } catch (e) {
@@ -496,6 +524,66 @@ class AgentBridge {
       await Future.delayed(const Duration(milliseconds: 500));
     }
     throw TimeoutException('Hermes 启动超时');
+  }
+
+  // ── 任务 Checkpoint（状态冻结核心）──
+
+  static const String _checkpointKey = 'hermes_task_checkpoint';
+
+  /// 写入当前任务 checkpoint（对话进度）。App 被杀/重启后据此恢复。
+  ///
+  /// [messages] 当前对话历史，[inProgress] 是否仍有未完成输出。
+  Future<void> saveCheckpoint({
+    required List<Map<String, dynamic>> messages,
+    required bool inProgress,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final filesDir = await _getFilesDir();
+      await prefs.setString(_checkpointKey, jsonEncode({
+        'updated_at': DateTime.now().toIso8601String(),
+        'messages': messages,
+        'in_progress': inProgress,
+        'has_hermes': true,
+      }));
+      // 同时写文件（跨进程/开机恢复用，不依赖 SharedPreferences）
+      final f = File('$filesDir/$_checkpointKey.json');
+      await f.writeAsString(jsonEncode({
+        'updated_at': DateTime.now().toIso8601String(),
+        'messages': messages,
+        'in_progress': inProgress,
+      }), flush: true);
+    } catch (e) {
+      debugPrint('[AgentBridge] 保存 checkpoint 失败: $e');
+    }
+  }
+
+  /// 读取任务 checkpoint。返回 null 表示无进行中任务。
+  Future<Map<String, dynamic>?> loadCheckpoint() async {
+    try {
+      final filesDir = await _getFilesDir();
+      final f = File('$filesDir/$_checkpointKey.json');
+      if (await f.exists()) {
+        return jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_checkpointKey);
+      return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[AgentBridge] 读取 checkpoint 失败: $e');
+      return null;
+    }
+  }
+
+  /// 清除 checkpoint（任务完成或用户放弃后）。
+  Future<void> clearCheckpoint() async {
+    try {
+      final filesDir = await _getFilesDir();
+      final f = File('$filesDir/$_checkpointKey.json');
+      if (await f.exists()) await f.delete();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_checkpointKey);
+    } catch (_) {}
   }
 
   Future<void> _extractAssets(
