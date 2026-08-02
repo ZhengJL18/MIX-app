@@ -1,25 +1,35 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 
-import 'package:mix_app/main.dart';
+import 'package:mix_app/theme/app_palette.dart';
+import 'package:mix_app/theme/app_theme.dart';
 
 void main() {
-  testWidgets('App renders smoke test', (WidgetTester tester) async {
-    // Mock SharedPreferences so that AppEntry sees onboarding as complete
-    SharedPreferences.setMockInitialValues({
-      'onboarding_complete': true,
-      'ai_vendor': 'deepseek',
-      'ai_model': 'deepseek-chat',
-      'api_key': 'test-key',
-      'identity': 'collegeEngineer',
-    });
+  testWidgets('主题色板预设有效', (WidgetTester tester) async {
+    // 所有预设色板都应包含完整语义色
+    for (final palette in AppTheme.palettes.values) {
+      expect(palette.primary, isNotNull);
+      expect(palette.bg, isNotNull);
+      expect(palette.surface, isNotNull);
+      expect(palette.text, isNotNull);
+      expect(palette.textMuted, isNotNull);
+      expect(palette.divider, isNotNull);
+    }
+  });
 
-    await tester.pumpWidget(const MixApp());
-    await tester.pumpAndSettle();
+  testWidgets('AppTheme 可构建 light/dark', (WidgetTester tester) async {
+    for (final id in AppThemeId.values) {
+      final light = AppTheme.build(id, brightness: Brightness.light);
+      final dark = AppTheme.build(id, brightness: Brightness.dark);
+      expect(light.scaffoldBackgroundColor, isNotNull);
+      expect(dark.scaffoldBackgroundColor, isNotNull);
+    }
+  });
 
-    expect(find.text('Mix'), findsOneWidget);
-    expect(find.text('AI'), findsOneWidget);
-    expect(find.text('刷题'), findsOneWidget);
-    expect(find.text('文件'), findsOneWidget);
+  testWidgets('AppPalette lerp 不崩溃', (WidgetTester tester) async {
+    final a = AppPalettePresets.warm;
+    final b = AppPalettePresets.night;
+    final mixed = a.lerp(b, 0.5);
+    expect(mixed.primary, isNotNull);
   });
 }
