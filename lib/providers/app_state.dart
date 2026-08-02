@@ -41,10 +41,26 @@ class AppState extends ChangeNotifier {
   bool _loadingNext = false;
   String? _lastError;
 
+  // ── 多题队列（连续流） ──
+  final List<Map<String, dynamic>> _questions = [];
+  int _cursor = 0;
+
+  /// 已加载题目队列（供刷题连续流渲染）。
+  List<Map<String, dynamic>> get questions => _questions;
+
+  /// 当前游标（当前展示的题在队列中的位置）。
+  int get cursor => _cursor;
+
+  /// 当前题目 = 队列游标处的题（兼容旧引用）。
+  @override
+  Map<String, dynamic>? get currentQuestion =>
+      _questions.isNotEmpty && _cursor < _questions.length
+          ? _questions[_cursor]
+          : null;
+
   int get questionIndex => _questionIndex;
   int? get currentSubjectId => _currentSubjectId;
   int? get currentKpId => _currentKpId;
-  Map<String, dynamic>? get currentQuestion => _currentQuestion;
   bool get loadingNext => _loadingNext;
   String? get lastError => _lastError;
 
@@ -75,7 +91,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// 三层筛选 + 出题：选科目 -> 选知识点 -> 取/生成题目。
+  /// 三层筛选 + 出题：选科目 -> 选知识点 -> 取/生成题目，追加到队列。
   ///
   /// [onStream] 可选：AI 现场生成时实时回调累积文本，UI 可流式渲染。
   Future<void> loadNextQuestion({
@@ -85,27 +101,55 @@ class AppState extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
     try {
-      final subjects = await subjectRepo.getAllSubjects();
-      if (subjects.isEmpty) {
-        _lastError = '请先在"科目管理"中创建至少一个科目和知识点';
-        return;
+      final question = await _generateOne(onStream: onStream);
+      if (question != null) {
+        _questions.add(question);
       }
-      final subjectId = await selectionEngine.selectSubject(kLocalUserId);
-      final kpId =
-          await selectionEngine.selectKp(kLocalUserId, subjectId, _questionIndex);
-      final questionId =
-          await _pregen.nextQuestionId(kLocalUserId, kpId, subjectId, onStream: onStream);
-      final question = await questionRepo.getById(questionId);
-
-      _currentSubjectId = subjectId;
-      _currentKpId = kpId;
-      _currentQuestion = question;
-      _questionIndex += 1;
     } catch (e) {
       _lastError = _friendlyError(e);
     } finally {
       _loadingNext = false;
       notifyListeners();
+    }
+  }
+
+  /// 生成一道题（选科目/知识点 + 取/生成题目）。
+  Future<Map<String, dynamic>?> _generateOne({
+    void Function(String accumulated)? onStream,
+  }) async {
+    final subjects = await subjectRepo.getAllSubjects();
+    if (subjects.isEmpty) {
+      _lastError = '请先在"科目管理"中创建至少一个科目和知识点';
+      return null;
+    }
+    final subjectId = await selectionEngine.selectSubject(kLocalUserId);
+    final kpId =
+        await selectionEngine.selectKp(kLocalUserId, subjectId, _questionIndex);
+    final questionId =
+        await _pregen.nextQuestionId(kLocalUserId, kpId, subjectId, onStream: onStream);
+    final question = await questionRepo.getById(questionId);
+
+    _currentSubjectId = subjectId;
+    _currentKpId = kpId;
+    _questionIndex += 1;
+    return question;
+  }
+
+  /// 移动游标到 [index]。同时保证前后有足够题目（前3后5缓存），
+  /// 不足时后台补齐。
+  Future<void> moveCursor(int index) async {
+    if (index < 0 || index >= _questions.length) return;
+    _cursor = index;
+    notifyListeners();
+    await ensureLoadedAround(index);
+  }
+
+  /// 保证 [index] 前后有足够题目：前 3 后 5。
+  /// 不足时后台生成补齐（AI 出题慢，尽量提前生成）。
+  Future<void> ensureLoadedAround(int index) async {
+    // 尾部不足 → 后台补足到 index+5
+    while (_questions.length < index + 5) {
+      await loadNextQuestion();
     }
   }
 
@@ -127,14 +171,16 @@ class AppState extends ChangeNotifier {
   }
 
   /// 提交作答结果：写 practice_records + 按 3.4 公式更新 kp_user_state。
+  ///
+  /// [question] 必传：多题队列下可能不是当前题。
   Future<void> submitAnswer({
     required bool correct,
+    required Map<String, dynamic> question,
     String? mainCause,
     String? minorCause,
   }) async {
     final kpId = _currentKpId;
     final subjectId = _currentSubjectId;
-    final question = _currentQuestion;
     if (kpId == null || subjectId == null || question == null) return;
 
     await practiceRepo.insertRecord(

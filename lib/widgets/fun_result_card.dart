@@ -17,7 +17,10 @@ enum FunResultType { skip, correct, wrong }
 class FunResultCard extends StatefulWidget {
   final FunResultType type;
 
-  const FunResultCard({super.key, required this.type});
+  /// 紧凑模式：嵌入外层滚动容器（连续流）时不用 center 撑满。
+  final bool compact;
+
+  const FunResultCard({super.key, required this.type, this.compact = false});
 
   @override
   State<FunResultCard> createState() => _FunResultCardState();
@@ -83,9 +86,9 @@ class _FunResultCardState extends State<FunResultCard> {
     final c = _content;
     return Container(
       color: AppColors.lightBg,
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(widget.compact ? 0 : 24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: widget.compact ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
           // 图片（缺失时 emoji 兜底）
           ClipRRect(

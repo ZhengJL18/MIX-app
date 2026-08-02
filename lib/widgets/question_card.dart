@@ -13,17 +13,51 @@ class QuestionCard extends StatelessWidget {
   final String? selectedOption;
   final ValueChanged<String?> onOptionSelected;
 
+  /// 紧凑模式：嵌入外层滚动容器（连续流）时不使用 Expanded。
   const QuestionCard({
     super.key,
     required this.question,
     this.selectedOption,
     required this.onOptionSelected,
+    this.compact = false,
   });
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final options = _parseOptions(question['options']);
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichContent(
+          content: question['content'] as String? ?? '',
+          style: t.bodyLarge?.copyWith(fontSize: 18, height: 1.7),
+        ),
+        SizedBox(height: 24),
+        // 选项
+        if (options.isNotEmpty) ...[
+          Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
+          const SizedBox(height: 12),
+          for (var i = 0; i < options.length; i++)
+            _OptionButton(
+              label: String.fromCharCode('A'.codeUnitAt(0) + i),
+              option: options[i],
+              selected: selectedOption == options[i],
+              onTap: () => onOptionSelected(
+                selectedOption == options[i] ? null : options[i],
+              ),
+            ),
+        ] else ...[
+          Text(
+            '（该题暂无选项，下滑查看答案后继续下一题）',
+            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
+          ),
+        ],
+      ],
+    );
 
     return Container(
       color: AppColors.lightBg,
@@ -47,40 +81,11 @@ class QuestionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          // 题干
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RichContent(
-                    content: question['content'] as String? ?? '',
-                    style: t.bodyLarge?.copyWith(fontSize: 18, height: 1.7),
-                  ),
-                  SizedBox(height: 24),
-                  // 选项
-                  if (options.isNotEmpty) ...[
-                    Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
-                    const SizedBox(height: 12),
-                    for (var i = 0; i < options.length; i++)
-                      _OptionButton(
-                        label: String.fromCharCode('A'.codeUnitAt(0) + i),
-                        option: options[i],
-                        selected: selectedOption == options[i],
-                        onTap: () => onOptionSelected(
-                          selectedOption == options[i] ? null : options[i],
-                        ),
-                      ),
-                  ] else ...[
-                    Text(
-                      '（该题暂无选项，下滑查看答案后继续下一题）',
-                      style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          // 题干（compact 时直接排，否则撑满滚动）
+          if (compact)
+            content
+          else
+            Expanded(child: SingleChildScrollView(child: content)),
         ],
       ),
     );
