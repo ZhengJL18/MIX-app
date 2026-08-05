@@ -44,6 +44,17 @@ class QuestionAgentService {
   /// kpId → 正在生成中的 Future（避免重复触发）。
   final Map<int, Future<void>> _inFlight = {};
 
+  /// 近期出过题的 kpId 序列（新→旧），planner 据此避免连续选同一知识点/科目。
+  final List<int> _recentKpIds = [];
+  static const int _recentKpMax = 6;
+
+  /// 出题成功 → 记录该 kp 到近期序列（科目/知识点轮换）。
+  void _rememberKp(int kpId) {
+    _recentKpIds.remove(kpId);
+    _recentKpIds.insert(0, kpId);
+    if (_recentKpIds.length > _recentKpMax) _recentKpIds.removeLast();
+  }
+
   /// 取下一题：预生成池有货直接取；没有则跑完整 planner→generator 出题。
   Future<int> nextQuestionId(int userId, {void Function(String)? onStream}) async {
     final settings = await AiSettings.load();
@@ -97,11 +108,24 @@ class QuestionAgentService {
     }
     final statusBlock = statuses.join('\n');
 
+    // 近期已出题的 kp（科目/知识点轮换，避免连续刷同一块）
+    final recentKpNames = <String>[];
+    for (final kpId in _recentKpIds) {
+      final n = await _kpRepo.getKpName(kpId);
+      if (n != null && n.isNotEmpty) recentKpNames.add(n);
+    }
+    final recentKpBlock = recentKpNames.isEmpty
+        ? '（暂无）'
+        : recentKpNames.join('、');
+
     final prompt = '''
 你是学习规划代理。根据以下各科目的知识点级状态，决定学生当前最该练哪个科目、哪个知识点。
 
 【各科目知识点状态】
 $statusBlock
+
+【近期刚出过题的知识点】（请避免连续选到它们）
+$recentKpBlock
 
 要求：输出 JSON（不要任何其他文字），格式：
 {"subject_id": <科目id>, "kp_id": <知识点id>, "reason": "<一句话理由>"}
@@ -110,6 +134,7 @@ $statusBlock
 1. 优先选"未练"的知识点（学生还没碰过的新知识点）。
 2. 其次选近期做错的（练习中"对M错K"里 K>0 的）。
 3. 不要选已经全对很多题的知识点（太简单）。
+4. 尽量避免与【近期刚出过题的知识点】重复 —— 换科目/换知识点练。
 ''';
 
     final planner = JailerAgent(
@@ -275,7 +300,7 @@ D. [选项D]
       options = [correctAnswer, '以上都不是', '无法确定', '选项 D'];
     }
 
-    return _questionRepo.insertQuestion(
+    final qid = await _questionRepo.insertQuestion(
       kpId: kpId,
       content: parsed.content,
       answer: correctAnswer,
@@ -287,6 +312,8 @@ D. [选项D]
       covCoef: parsed.covCoef,
       isSeed: false,
     );
+    _rememberKp(kpId); // 科目/知识点轮换：记录刚出的 kp
+    return qid;
   }
 
   /// 从 agent 输出里提取 JSON（容忍 ```json 包裹 / 前后杂文字）。
