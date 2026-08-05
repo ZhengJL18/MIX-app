@@ -6,7 +6,7 @@ import '../services/ai_service.dart';
 import '../repository/subject_repository.dart';
 import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../data/preset_data.dart';
 import 'swipeable_stack.dart';
 import 'ai_progress_slider.dart';
@@ -113,7 +113,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               child: TextButton(
                 onPressed: () => widget.onComplete(),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.lightTextMuted,
+                  foregroundColor: context.appPalette.textMuted,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 ),
                 child: const Text('跳过', style: TextStyle(fontSize: 14)),
@@ -232,7 +232,7 @@ class _StepAiConfig extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,9 +286,9 @@ class _StepAiConfig extends StatelessWidget {
                       label: Text(m),
                       selected: selectedModel == m,
                       onSelected: (_) => onModelChanged?.call(m),
-                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                      selectedColor: context.appPalette.primary.withValues(alpha: 0.15),
                       labelStyle: TextStyle(
-                        color: selectedModel == m ? AppColors.primary : null,
+                        color: selectedModel == m ? context.appPalette.primary : null,
                         fontWeight: selectedModel == m ? FontWeight.w600 : null,
                       ),
                     )).toList(),
@@ -301,12 +301,12 @@ class _StepAiConfig extends StatelessWidget {
                 TextField(
                   decoration: InputDecoration(
                     hintText: '粘贴 API Key',
-                    hintStyle: TextStyle(color: AppColors.lightTextMuted.withValues(alpha: 0.5)),
+                    hintStyle: TextStyle(color: context.appPalette.textMuted.withValues(alpha: 0.5)),
                     filled: true,
-                    fillColor: AppColors.lightSurface,
+                    fillColor: context.appPalette.surface,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.lightDivider),
+                      borderSide: BorderSide(color: context.appPalette.divider),
                     ),
                     contentPadding: const EdgeInsets.all(16),
                   ),
@@ -317,9 +317,9 @@ class _StepAiConfig extends StatelessWidget {
                   SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.check_circle, color: AppColors.correct, size: 16),
+                      Icon(Icons.check_circle, color: context.appPalette.correct, size: 16),
                       SizedBox(width: 6),
-                      Text('Key 已配置（仅存本地）', style: TextStyle(color: AppColors.correct, fontSize: 13)),
+                      Text('Key 已配置（仅存本地）', style: TextStyle(color: context.appPalette.correct, fontSize: 13)),
                     ],
                   ),
                 ],
@@ -348,7 +348,7 @@ class _StepIdentity extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,7 +381,7 @@ class _StepIdentity extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(cat.label, style: t.titleMedium?.copyWith(
-                          color: AppColors.lightTextMuted, fontSize: 14,
+                          color: context.appPalette.textMuted, fontSize: 14,
                         )),
                       ),
                     ),
@@ -471,7 +471,7 @@ class _StepSubjectsState extends State<_StepSubjects> {
     final t = Theme.of(context).textTheme;
 
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       child: Column(
         children: [
           const SizedBox(height: 16),
@@ -509,7 +509,7 @@ class _StepSubjectsState extends State<_StepSubjects> {
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: AppColors.lightSurface,
+                color: context.appPalette.surface,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
@@ -546,7 +546,7 @@ class _StepSubjectsState extends State<_StepSubjects> {
                           padding: const EdgeInsets.symmetric(vertical: 40),
                           child: Center(
                             child: Text('请先在「选择身份」页设置你的身份',
-                              style: TextStyle(color: AppColors.lightTextMuted),
+                              style: TextStyle(color: context.appPalette.textMuted),
                             ),
                           ),
                         ),
@@ -573,7 +573,7 @@ class _StepSubjectsState extends State<_StepSubjects> {
                         const Divider(height: 24),
                         Text('🤖 AI 正在推荐...', style: t.labelLarge),
                         SizedBox(height: 8),
-                        LinearProgressIndicator(color: AppColors.primary),
+                        LinearProgressIndicator(color: context.appPalette.primary),
                       ],
 
                       // 自定义添加
@@ -589,9 +589,9 @@ class _StepSubjectsState extends State<_StepSubjects> {
                                 controller: _customCtrl,
                                 decoration: InputDecoration(
                                   hintText: '输入科目名',
-                                  hintStyle: TextStyle(color: AppColors.lightTextMuted.withValues(alpha: 0.5)),
+                                  hintStyle: TextStyle(color: context.appPalette.textMuted.withValues(alpha: 0.5)),
                                   filled: true,
-                                  fillColor: AppColors.lightSurfaceAlt,
+                                  fillColor: context.appPalette.surfaceAlt,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                     borderSide: BorderSide.none,
@@ -629,7 +629,7 @@ class _StepSubjectsState extends State<_StepSubjects> {
                           children: widget.customSubjects.map((name) => InputChip(
                             label: Text(name),
                             onDeleted: () => widget.onRemoveCustom(name),
-                            deleteIconColor: AppColors.wrong,
+                            deleteIconColor: context.appPalette.wrong,
                           )).toList(),
                         ),
                       ],
@@ -673,7 +673,7 @@ class _StepComplete extends StatelessWidget {
         : (kAiVendors.where((v) => v.id == vendorName).firstOrNull?.name ?? vendorName);
 
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -704,7 +704,7 @@ class _StepComplete extends StatelessWidget {
             child: ElevatedButton(
               onPressed: onFinish,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: context.appPalette.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: const Text('🚀 开始刷题！', style: TextStyle(fontSize: 18, color: Colors.white)),
@@ -736,10 +736,10 @@ class _ProgressDots extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 2),
             decoration: BoxDecoration(
               color: done
-                  ? AppColors.primary
+                  ? context.appPalette.primary
                   : active
-                      ? AppColors.primary.withValues(alpha: 0.6)
-                      : AppColors.lightDivider,
+                      ? context.appPalette.primary.withValues(alpha: 0.6)
+                      : context.appPalette.divider,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -762,7 +762,7 @@ class _SwipeHint extends StatelessWidget {
           Text(
             '下滑下一步 ➡',
             style: TextStyle(
-              color: AppColors.lightTextMuted.withValues(alpha: 0.6),
+              color: context.appPalette.textMuted.withValues(alpha: 0.6),
               fontSize: 13,
             ),
           ),
@@ -792,10 +792,10 @@ class _VendorCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primaryLight : AppColors.lightSurface,
+            color: selected ? context.appPalette.primaryLight : context.appPalette.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.lightDivider,
+              color: selected ? context.appPalette.primary : context.appPalette.divider,
               width: selected ? 2 : 1,
             ),
           ),
@@ -805,7 +805,7 @@ class _VendorCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppColors.gold,
+                    color: context.appPalette.gold,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text('推荐', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
@@ -817,11 +817,11 @@ class _VendorCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(vendor.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(vendor.keyHint, style: TextStyle(fontSize: 12, color: AppColors.lightTextMuted)),
+                    Text(vendor.keyHint, style: TextStyle(fontSize: 12, color: context.appPalette.textMuted)),
                   ],
                 ),
               ),
-              if (selected) Icon(Icons.check_circle, color: AppColors.primary, size: 22),
+              if (selected) Icon(Icons.check_circle, color: context.appPalette.primary, size: 22),
             ],
           ),
         ),
@@ -887,10 +887,10 @@ class _CustomVendorCardState extends State<_CustomVendorCard> {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: widget.selected ? AppColors.primaryLight : AppColors.lightSurface,
+            color: widget.selected ? context.appPalette.primaryLight : context.appPalette.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: widget.selected ? AppColors.primary : AppColors.lightDivider,
+              color: widget.selected ? context.appPalette.primary : context.appPalette.divider,
               width: widget.selected ? 2 : 1,
             ),
           ),
@@ -955,17 +955,17 @@ class _IdentityChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.lightSurface,
+          color: selected ? context.appPalette.primary : context.appPalette.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.lightDivider,
+            color: selected ? context.appPalette.primary : context.appPalette.divider,
             width: selected ? 2 : 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : AppColors.lightText,
+            color: selected ? Colors.white : context.appPalette.text,
             fontWeight: FontWeight.w500,
           ),
         ),

@@ -6,7 +6,7 @@ import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
 import '../repository/practice_repository.dart';
 import '../repository/subject_repository.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -112,7 +112,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     s.reviewed
                         ? '${(s.avgMastery * 100).toStringAsFixed(0)}%'
                         : '未开始',
-                    style: TextStyle(color: AppColors.lightTextMuted),
+                    style: TextStyle(color: context.appPalette.textMuted),
                   ),
                 ),
               ),

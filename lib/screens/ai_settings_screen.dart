@@ -5,7 +5,7 @@ import '../data/preset_data.dart';
 import '../models/ai_settings.dart';
 import '../providers/app_state.dart';
 import '../services/ai_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// AI 设置页（二级页面）— 配置对话（原生 Hermes）与刷题出题共用的模型。
 class AiSettingsScreen extends StatefulWidget {
@@ -102,9 +102,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightBg,
+      backgroundColor: context.appPalette.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.lightBg,
+        backgroundColor: context.appPalette.bg,
         title: const Text('AI 设置'),
       ),
       body: !_loaded
@@ -115,18 +115,18 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
+                    color: context.appPalette.primaryLight,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline, color: AppColors.primary, size: 18),
+                      Icon(Icons.info_outline, color: context.appPalette.primary, size: 18),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '这里配置的模型会同时用于「刷题出题」「AI 对话」和本地 Hermes Agent，三处共用同一个模型与 Key。',
-                          style: TextStyle(color: AppColors.lightText, fontSize: 13, height: 1.5),
+                          style: TextStyle(color: context.appPalette.text, fontSize: 13, height: 1.5),
                         ),
                       ),
                     ],
@@ -136,7 +136,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
                 // ── 厂商选择 ──
                 Text('AI 厂商',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.appPalette.textMuted)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _vendorId,
@@ -154,7 +154,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
                 // ── 模型 ──
                 Text('模型',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.appPalette.textMuted)),
                 SizedBox(height: 8),
                 TextField(
                   controller: _modelCtrl,
@@ -164,7 +164,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   SizedBox(height: 6),
                   Text(
                     '推荐：${_preset!.models.join('、')}',
-                    style: TextStyle(fontSize: 12, color: AppColors.lightTextMuted),
+                    style: TextStyle(fontSize: 12, color: context.appPalette.textMuted),
                   ),
                 ],
                 SizedBox(height: 20),
@@ -172,7 +172,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 // ── Base URL（仅自定义厂商） ──
                 if (_isCustom) ...[
                   Text('Base URL',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.appPalette.textMuted)),
                   SizedBox(height: 8),
                   TextField(
                     controller: _baseUrlCtrl,
@@ -183,7 +183,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
                 // ── API Key ──
                 Text('API Key',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.lightTextMuted)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.appPalette.textMuted)),
                 SizedBox(height: 8),
                 TextField(
                   controller: _keyCtrl,
@@ -192,7 +192,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureKey ? Icons.visibility_off : Icons.visibility,
-                        color: AppColors.lightTextMuted,
+                        color: context.appPalette.textMuted,
                       ),
                       onPressed: () => setState(() => _obscureKey = !_obscureKey),
                     ),
@@ -205,7 +205,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   height: 48,
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.appPalette.primary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
                     onPressed: _saving ? null : _save,
@@ -226,17 +226,17 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   InputDecoration _fieldDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: AppColors.lightTextMuted),
+      hintStyle: TextStyle(color: context.appPalette.textMuted),
       filled: true,
-      fillColor: AppColors.lightSurface,
+      fillColor: context.appPalette.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.lightDivider),
+        borderSide: BorderSide(color: context.appPalette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.lightDivider),
+        borderSide: BorderSide(color: context.appPalette.divider),
       ),
     );
   }

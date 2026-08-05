@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// 带 AI 档位的 snap-to-stop 可拖动进度条
 ///
@@ -85,10 +85,10 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: _enabled ? AppColors.primary : Colors.transparent,
+                    color: _enabled ? context.appPalette.primary : Colors.transparent,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: _enabled ? AppColors.primary : AppColors.lightDivider,
+                      color: _enabled ? context.appPalette.primary : context.appPalette.divider,
                       width: 2,
                     ),
                   ),
@@ -108,7 +108,7 @@ class _AiProgressSliderState extends State<AiProgressSlider>
             child: Text(
               '📍 学到：$_currentLabel',
               style: textTheme.labelLarge?.copyWith(
-                color: _enabled ? AppColors.primary : AppColors.lightTextMuted,
+                color: _enabled ? context.appPalette.primary : context.appPalette.textMuted,
                 fontSize: 13,
               ),
             ),
@@ -141,7 +141,7 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                             child: Container(
                               height: 6,
                               decoration: BoxDecoration(
-                                color: AppColors.lightDivider,
+                                color: context.appPalette.divider,
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
@@ -154,7 +154,7 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                             child: Container(
                               height: 6,
                               decoration: BoxDecoration(
-                                color: AppColors.primary,
+                                color: context.appPalette.primary,
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
@@ -172,8 +172,8 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                                     height: 12,
                                     decoration: BoxDecoration(
                                       color: isAtOrBefore
-                                          ? AppColors.primary
-                                          : AppColors.lightDivider,
+                                          ? context.appPalette.primary
+                                          : context.appPalette.divider,
                                       borderRadius: BorderRadius.circular(2),
                                     ),
                                   ),
@@ -186,8 +186,8 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                                       style: TextStyle(
                                         fontSize: 9,
                                         color: _sliderValue * (stopCount - 1) >= i
-                                            ? AppColors.primary
-                                            : AppColors.lightTextMuted,
+                                            ? context.appPalette.primary
+                                            : context.appPalette.textMuted,
                                         fontWeight: _sliderValue * (stopCount - 1) >= i
                                             ? FontWeight.w600
                                             : FontWeight.normal,
@@ -211,13 +211,13 @@ class _AiProgressSliderState extends State<AiProgressSlider>
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withValues(alpha: 0.3),
+                                    color: context.appPalette.primary.withValues(alpha: 0.3),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
                                 border: Border.all(
-                                  color: AppColors.primary,
+                                  color: context.appPalette.primary,
                                   width: 2.5,
                                 ),
                               ),

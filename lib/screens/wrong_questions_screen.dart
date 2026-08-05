@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../repository/practice_repository.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/rich_content.dart';
 
 /// 错题回顾 — 展示最近做错的题目、正确答案与解析。
@@ -38,9 +38,9 @@ class _WrongQuestionsScreenState extends State<WrongQuestionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightBg,
+      backgroundColor: context.appPalette.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.lightBg,
+        backgroundColor: context.appPalette.bg,
         title: const Text('错题回顾'),
       ),
       body: _loading
@@ -48,7 +48,7 @@ class _WrongQuestionsScreenState extends State<WrongQuestionsScreen> {
           : _questions.isEmpty
               ? Center(
                   child: Text('还没有做错的题，继续加油！',
-                      style: TextStyle(color: AppColors.lightTextMuted, fontSize: 15)),
+                      style: TextStyle(color: context.appPalette.textMuted, fontSize: 15)),
                 )
               : RefreshIndicator(
                   onRefresh: _load,
@@ -85,9 +85,9 @@ class _WrongQuestionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.lightSurface,
+        color: context.appPalette.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.lightDivider),
+        border: Border.all(color: context.appPalette.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,17 +97,17 @@ class _WrongQuestionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.wrong.withValues(alpha: 0.12),
+                  color: context.appPalette.wrong.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text('错题',
-                    style: TextStyle(color: AppColors.wrong, fontSize: 11, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: context.appPalette.wrong, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '${q['subject_name']} · ${q['kp_name']}',
-                  style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
+                  style: TextStyle(color: context.appPalette.textMuted, fontSize: 12),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -116,7 +116,7 @@ class _WrongQuestionCard extends StatelessWidget {
           SizedBox(height: 10),
           RichContent(
             content: q['content'] as String? ?? '',
-            style: TextStyle(color: AppColors.lightText, fontSize: 15, height: 1.6),
+            style: TextStyle(color: context.appPalette.text, fontSize: 15, height: 1.6),
           ),
           if (options.isNotEmpty) ...[
             SizedBox(height: 10),
@@ -126,7 +126,7 @@ class _WrongQuestionCard extends StatelessWidget {
                 child: RichContent(
                   content: '${String.fromCharCode('A'.codeUnitAt(0) + i)}. ${options[i]}',
                   style: TextStyle(
-                    color: options[i] == answer ? AppColors.correct : AppColors.lightTextMuted,
+                    color: options[i] == answer ? context.appPalette.correct : context.appPalette.textMuted,
                     fontSize: 13,
                     fontWeight: options[i] == answer ? FontWeight.w600 : FontWeight.normal,
                   ),
@@ -138,19 +138,19 @@ class _WrongQuestionCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primaryLight,
+              color: context.appPalette.primaryLight,
               borderRadius: BorderRadius.circular(8),
             ),
             child: RichContent(
               content: '正确答案：$answer',
-              style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(color: context.appPalette.primary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
           if ((q['explanation'] as String? ?? '').isNotEmpty) ...[
             SizedBox(height: 8),
             RichContent(
               content: '解析：${q['explanation']}',
-              style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.5),
+              style: TextStyle(color: context.appPalette.textMuted, fontSize: 13, height: 1.5),
             ),
           ],
         ],

@@ -119,9 +119,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
   }
 }
 
-/// 便捷扩展：从 BuildContext 取当前主题色板。
-extension AppColorsContext on BuildContext {
-  AppPalette get appColors =>
+/// 便捷扩展：从 BuildContext 取当前主题色板（学 Hermes）。
+extension AppPaletteContext on BuildContext {
+  AppPalette get appPalette =>
       Theme.of(this).extension<AppPalette>() ?? AppPalettePresets.warmLight;
 }
 

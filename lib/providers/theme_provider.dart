@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 
 /// 全局主题状态 — 支持多套主题自由切换，持久化到本地。
@@ -24,12 +23,10 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 切换主题色板。
+  /// 切换主题色板（ThemeData 重建 + ThemeExtension 自动跟随，无需同步全局）。
   Future<void> setTheme(AppThemeId id) async {
     if (_themeId == id) return;
     _themeId = id;
-    // 同步全局活动色板（AppColors.xxx 据此跟随主题）
-    AppColors.palette = AppTheme.palettes[id]!;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_themeKey, id.id);

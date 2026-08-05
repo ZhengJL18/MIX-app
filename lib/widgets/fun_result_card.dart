@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// 趣味结果类型
 enum FunResultType { skip, correct, wrong }
@@ -27,32 +27,38 @@ class _FunResultCardState extends State<FunResultCard> {
   late final FunContent _content;
 
   @override
-  void initState() {
-    super.initState();
-    _content = _pickContent(widget.type);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 首次能拿 context 时选一张固定（静态方法拿不到 context，需传 palette）
+    if (!_initialized) {
+      _initialized = true;
+      _content = _pickContent(widget.type, context.appPalette);
+    }
   }
 
+  bool _initialized = false;
+
   /// 按情境随机选一张图。
-  static FunContent _pickContent(FunResultType type) {
+  static FunContent _pickContent(FunResultType type, AppPalette palette) {
     final random = Random();
     switch (type) {
       case FunResultType.skip:
         final pool = [
-          _fc('skip_weizuowan', '诶呀还没做完呢', '下滑可跳过本题', AppColors.lightTextMuted, '🤔'),
+          _fc('skip_weizuowan', '诶呀还没做完呢', '下滑可跳过本题', palette.textMuted, '🤔'),
         ];
         return pool[random.nextInt(pool.length)];
       case FunResultType.correct:
         final pool = [
-          _fc('correct_tiancai', '天才！', '回答正确', AppColors.correct, '🎉'),
-          _fc('correct_zhenbang', '真棒', '回答正确', AppColors.correct, '💪'),
-          _fc('correct_wenzhenbang', '我真棒', '回答正确', AppColors.correct, '😎'),
-          _fc('correct_qiangqiang', '！？强强？！', '回答正确', AppColors.correct, '🔥'),
+          _fc('correct_tiancai', '天才！', '回答正确', palette.correct, '🎉'),
+          _fc('correct_zhenbang', '真棒', '回答正确', palette.correct, '💪'),
+          _fc('correct_wenzhenbang', '我真棒', '回答正确', palette.correct, '😎'),
+          _fc('correct_qiangqiang', '！？强强？！', '回答正确', palette.correct, '🔥'),
         ];
         return pool[random.nextInt(pool.length)];
       case FunResultType.wrong:
         final pool = [
-          _fc('wrong_alie', '啊咧，错了吗', '回答错误', AppColors.wrong, '🙃'),
-          _fc('wrong_ah', '啊！错了！', '回答错误', AppColors.wrong, '😬'),
+          _fc('wrong_alie', '啊咧，错了吗', '回答错误', palette.wrong, '🙃'),
+          _fc('wrong_ah', '啊！错了！', '回答错误', palette.wrong, '😬'),
         ];
         return pool[random.nextInt(pool.length)];
     }
@@ -72,7 +78,7 @@ class _FunResultCardState extends State<FunResultCard> {
   Widget build(BuildContext context) {
     final c = _content;
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       padding: EdgeInsets.all(widget.compact ? 0 : 24),
       child: Column(
         mainAxisAlignment: widget.compact ? MainAxisAlignment.start : MainAxisAlignment.center,
@@ -127,7 +133,7 @@ class _FunResultCardState extends State<FunResultCard> {
           SizedBox(height: 8),
           Text(
             '下滑${widget.type == FunResultType.skip ? '跳过本题' : '查看解析'} ➡',
-            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
+            style: TextStyle(color: context.appPalette.textMuted, fontSize: 13),
           ),
         ],
       ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'app_colors.dart';
 import 'app_palette.dart';
 
 /// 主题标识 — 可持久化到 SharedPreferences。
@@ -61,8 +60,6 @@ class AppTheme {
   static ThemeData build(AppThemeId id, {required Brightness brightness}) {
     final isDark = brightness == Brightness.dark;
     final palette = paletteFor(id, isDark: isDark);
-    // 同步全局活动色板（AppColors.xxx 据此跟随主题）
-    AppColors.palette = palette;
 
     final scheme = isDark
         ? ColorScheme.dark(

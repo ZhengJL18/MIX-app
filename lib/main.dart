@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
-import 'theme/app_colors.dart';
+import 'theme/app_palette.dart';
 import 'providers/app_state.dart';
 import 'providers/theme_provider.dart';
 import 'screens/practice_screen.dart';
@@ -61,7 +61,7 @@ class _ThemedAppState extends State<_ThemedApp> {
       builder: (context, themeProvider, _) {
         final id = themeProvider.themeId;
         // key 随主题/明暗变化 → 强制整棵 MaterialApp 重建，
-        // 让所有用 AppColors.xxx（全局 getter）的组件重新读新色板，
+        // 让所有用 context.appPalette.xxx（全局 getter）的组件重新读新色板，
         // 否则主题切换后页面颜色不刷新。
         return MaterialApp(
           key: ValueKey('${id.id}-${themeProvider.mode.name}'),
@@ -199,11 +199,11 @@ class _MainShellState extends State<_MainShell> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.auto_awesome, color: AppColors.primary, size: 22),
+                Icon(Icons.auto_awesome, color: context.appPalette.primary, size: 22),
                 SizedBox(width: 6),
                 Text('Mix',
                     style: TextStyle(
-                        color: AppColors.lightText,
+                        color: context.appPalette.text,
                         fontSize: 20,
                         fontWeight: FontWeight.bold)),
               ],
@@ -278,7 +278,7 @@ class _MainShellState extends State<_MainShell> {
   void _openMenu() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.lightSurface,
+      backgroundColor: context.appPalette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -291,7 +291,7 @@ class _MainShellState extends State<_MainShell> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.lightDivider,
+                color: context.appPalette.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -331,7 +331,7 @@ class _MainShellState extends State<_MainShell> {
 
   Widget _menuItem(BuildContext ctx, IconData icon, String label, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: AppColors.primary),
+      leading: Icon(icon, color: context.appPalette.primary),
       title: Text(label),
       onTap: onTap,
     );
@@ -347,18 +347,18 @@ class _MainShellState extends State<_MainShell> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: active
-              ? AppColors.primary.withValues(alpha: 0.15)
+              ? context.appPalette.primary.withValues(alpha: 0.15)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: active ? AppColors.primary : AppColors.lightTextMuted),
+            Icon(icon, size: 16, color: active ? context.appPalette.primary : context.appPalette.textMuted),
             SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
-                    color: active ? AppColors.primary : AppColors.lightTextMuted,
+                    color: active ? context.appPalette.primary : context.appPalette.textMuted,
                     fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
           ],
         ),
@@ -547,15 +547,15 @@ class _ChatScreenState extends State<_ChatScreen>
             constraints: const BoxConstraints(maxWidth: 320),
             decoration: BoxDecoration(
               color: isUser
-                  ? AppColors.primary
-                  : (t.isError ? AppColors.wrong : AppColors.lightSurfaceAlt),
+                  ? context.appPalette.primary
+                  : (t.isError ? context.appPalette.wrong : context.appPalette.surfaceAlt),
               borderRadius: BorderRadius.circular(14),
             ),
             child: isUser || t.isError || t.isStreaming
                 ? Text(
                     t.content.isEmpty ? '…' : t.content,
                     style: TextStyle(
-                      color: isUser ? Colors.white : AppColors.lightText,
+                      color: isUser ? Colors.white : context.appPalette.text,
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -563,7 +563,7 @@ class _ChatScreenState extends State<_ChatScreen>
                 : MarkdownBody(
                     data: t.content,
                     styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                      p: TextStyle(color: AppColors.lightText, fontSize: 14, height: 1.5),
+                      p: TextStyle(color: context.appPalette.text, fontSize: 14, height: 1.5),
                     ),
                   ),
           ),
@@ -578,7 +578,7 @@ class _ChatScreenState extends State<_ChatScreen>
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: s.isWarning ? AppColors.primaryLight : AppColors.lightSurfaceAlt,
+              color: s.isWarning ? context.appPalette.primaryLight : context.appPalette.surfaceAlt,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -587,13 +587,13 @@ class _ChatScreenState extends State<_ChatScreen>
                 Icon(
                   s.isWarning ? Icons.warning_amber : Icons.info_outline,
                   size: 14,
-                  color: AppColors.lightTextMuted,
+                  color: context.appPalette.textMuted,
                 ),
                 SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     s.text,
-                    style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
+                    style: TextStyle(color: context.appPalette.textMuted, fontSize: 12),
                   ),
                 ),
               ],
@@ -609,7 +609,7 @@ class _ChatScreenState extends State<_ChatScreen>
   Widget build(BuildContext context) {
     super.build(context); // AutomaticKeepAliveClientMixin 要求
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       child: Column(
         children: [
           // 顶部 Agent 状态条（原生 Hermes 进程内运行，恒就绪）
@@ -617,12 +617,12 @@ class _ChatScreenState extends State<_ChatScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(
               children: [
-                Icon(Icons.bolt, size: 14, color: AppColors.correct),
+                Icon(Icons.bolt, size: 14, color: context.appPalette.correct),
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     '原生 Hermes Agent 已就绪',
-                    style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
+                    style: TextStyle(color: context.appPalette.textMuted, fontSize: 12),
                   ),
                 ),
 
@@ -637,10 +637,10 @@ class _ChatScreenState extends State<_ChatScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline, color: AppColors.lightTextMuted, size: 56),
+                        Icon(Icons.chat_bubble_outline, color: context.appPalette.textMuted, size: 56),
                         SizedBox(height: 12),
                         Text('问我任何学习问题',
-                            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 16)),
+                            style: TextStyle(color: context.appPalette.textMuted, fontSize: 16)),
                       ],
                     ),
                   )
@@ -663,9 +663,9 @@ class _ChatScreenState extends State<_ChatScreen>
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
                       hintText: '输入问题...',
-                      hintStyle: TextStyle(color: AppColors.lightTextMuted),
+                      hintStyle: TextStyle(color: context.appPalette.textMuted),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: context.appPalette.surfaceAlt,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
@@ -681,8 +681,8 @@ class _ChatScreenState extends State<_ChatScreen>
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _sending
-                          ? AppColors.lightTextMuted
-                          : AppColors.primary,
+                          ? context.appPalette.textMuted
+                          : context.appPalette.primary,
                       shape: BoxShape.circle,
                     ),
                     child: _sending
@@ -716,9 +716,9 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: AppColors.lightSurfaceAlt,
+          color: context.appPalette.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.lightDivider),
+          border: Border.all(color: context.appPalette.divider),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -739,17 +739,17 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                               : Icons.check_circle_outline,
                       size: 14,
                       color: b.isError
-                          ? AppColors.wrong
+                          ? context.appPalette.wrong
                           : b.isRunning
-                              ? AppColors.secondary
-                              : AppColors.correct,
+                              ? context.appPalette.secondary
+                              : context.appPalette.correct,
                     ),
                     SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         b.toolLabel,
                         style: TextStyle(
-                          color: AppColors.lightTextMuted,
+                          color: context.appPalette.textMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -766,7 +766,7 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                       Icon(
                         b.expanded ? Icons.expand_less : Icons.expand_more,
                         size: 14,
-                        color: AppColors.lightTextMuted,
+                        color: context.appPalette.textMuted,
                       ),
                   ],
                 ),
@@ -776,7 +776,7 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
                     child: Text(
                       b.errorMessage ?? b.resultSummary ?? '',
                       style: TextStyle(
-                        color: b.isError ? AppColors.wrong : AppColors.lightTextMuted,
+                        color: b.isError ? context.appPalette.wrong : context.appPalette.textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -817,7 +817,7 @@ class _FilesScreenState extends State<_FilesScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -825,7 +825,7 @@ class _FilesScreenState extends State<_FilesScreen> {
             icon: Icons.auto_awesome,
             title: '原生 Hermes Agent',
             subtitle: '进程内运行，带记忆/文件/网络工具，可直接在 AI 对话页使用',
-            trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+            trailing: Icon(Icons.check_circle, color: context.appPalette.correct, size: 20),
           ),
           SizedBox(height: 12),
           _InfoCard(
@@ -836,7 +836,7 @@ class _FilesScreenState extends State<_FilesScreen> {
                 : '未配置，刷题会使用示例题，请到「AI 设置」配置',
             trailing: Icon(
               _aiConfigured ? Icons.check_circle : Icons.error_outline,
-              color: _aiConfigured ? AppColors.correct : AppColors.secondary,
+              color: _aiConfigured ? context.appPalette.correct : context.appPalette.secondary,
               size: 20,
             ),
           ),
@@ -845,7 +845,7 @@ class _FilesScreenState extends State<_FilesScreen> {
             icon: Icons.storage,
             title: '数据存储',
             subtitle: '学习数据、题目与做题记录均保存在本机，不上传云端',
-            trailing: Icon(Icons.lock_outline, color: AppColors.lightTextMuted, size: 20),
+            trailing: Icon(Icons.lock_outline, color: context.appPalette.textMuted, size: 20),
           ),
         ],
       ),
@@ -871,24 +871,24 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appPalette.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.lightDivider),
+        border: Border.all(color: context.appPalette.divider),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primary, size: 24),
+          Icon(icon, color: context.appPalette.primary, size: 24),
           SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: TextStyle(color: AppColors.lightText, fontSize: 15, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: context.appPalette.text, fontSize: 15, fontWeight: FontWeight.w600)),
                 SizedBox(height: 4),
                 Text(subtitle,
-                    style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.4)),
+                    style: TextStyle(color: context.appPalette.textMuted, fontSize: 13, height: 1.4)),
               ],
             ),
           ),

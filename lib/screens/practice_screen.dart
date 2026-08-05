@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_state.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/question_card.dart';
 import '../widgets/answer_card.dart';
 import '../widgets/feedback_card.dart';
@@ -144,7 +144,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         // 空
         if (questions.isEmpty) {
           return Center(
-            child: Text('暂无题目', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 16)),
+            child: Text('暂无题目', style: TextStyle(color: context.appPalette.textMuted, fontSize: 16)),
           );
         }
 
@@ -154,7 +154,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         final totalPages = questions.length * 3;
 
         return Container(
-          color: AppColors.lightBg,
+          color: context.appPalette.bg,
           child: Column(
             children: [
               const _StatusBar(),
@@ -204,7 +204,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                             child: Center(
                               child: Text(
                                 '还没做题呢，下滑跳过本题 ➡',
-                                style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
+                                style: TextStyle(color: context.appPalette.textMuted, fontSize: 14),
                               ),
                             ),
                           );
@@ -356,7 +356,7 @@ class _FullPageState extends State<_FullPage> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       child: LayoutBuilder(
         builder: (context, constraints) {
           _trackHeight = constraints.maxHeight;
@@ -434,16 +434,16 @@ class _LoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: AppColors.primary),
+          CircularProgressIndicator(color: context.appPalette.primary),
           const SizedBox(height: 16),
           Text(
             'AI 正在生成题目...',
-            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
+            style: TextStyle(color: context.appPalette.textMuted, fontSize: 14),
           ),
           if (streamingText.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -451,7 +451,7 @@ class _LoadingView extends StatelessWidget {
               child: SingleChildScrollView(
                 child: RichContent(
                   content: streamingText,
-                  style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13, height: 1.5),
+                  style: TextStyle(color: context.appPalette.textMuted, fontSize: 13, height: 1.5),
                 ),
               ),
             ),
@@ -471,17 +471,17 @@ class _StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      color: AppColors.lightSurface,
+      color: context.appPalette.surface,
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.15),
+              color: context.appPalette.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text('刷题 · 连续流',
-                style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: context.appPalette.primary, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -504,9 +504,9 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.info_outline, size: 48, color: Color(0xFF8B7355)),
+            Icon(Icons.info_outline, size: 48, color: context.appPalette.textMuted),
             const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF8B7355))),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: context.appPalette.textMuted)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: onRetry, child: const Text('重试')),
           ],

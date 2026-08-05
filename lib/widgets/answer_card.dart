@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'rich_content.dart';
 
 /// 答案内容块 — 展示参考答案 + 解析 + 系数。
@@ -36,20 +36,20 @@ class AnswerCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.primaryLight,
+            color: context.appPalette.primaryLight,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            border: Border.all(color: context.appPalette.primary.withValues(alpha: 0.2)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 18),
+                  Icon(Icons.lightbulb_outline, color: context.appPalette.primary, size: 18),
                   SizedBox(width: 6),
                   Text('参考答案',
                       style: TextStyle(
-                        color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15,
+                        color: context.appPalette.primary, fontWeight: FontWeight.w600, fontSize: 15,
                       )),
                 ],
               ),
@@ -69,7 +69,7 @@ class AnswerCard extends StatelessWidget {
           RichContent(
             content: explanation,
             style: TextStyle(
-              color: AppColors.lightTextMuted,
+              color: context.appPalette.textMuted,
               height: 1.5,
               fontSize: 14,
             ),
@@ -80,19 +80,19 @@ class AnswerCard extends StatelessWidget {
           SizedBox(height: 12),
           Row(
             children: [
-              Text('出题参考系数：', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted)),
+              Text('出题参考系数：', style: TextStyle(fontSize: 11, color: context.appPalette.textMuted)),
             ],
           ),
           SizedBox(height: 4),
           Row(
             children: [
-              _CoefChip('复杂度', cplx, AppColors.primary),
+              _CoefChip('复杂度', cplx, context.appPalette.primary),
               SizedBox(width: 6),
-              _CoefChip('理解', und, AppColors.secondary),
+              _CoefChip('理解', und, context.appPalette.secondary),
               SizedBox(width: 6),
-              _CoefChip('冗余', red, AppColors.accent),
+              _CoefChip('冗余', red, context.appPalette.accent),
               SizedBox(width: 6),
-              _CoefChip('覆盖', cov, AppColors.lightTextMuted),
+              _CoefChip('覆盖', cov, context.appPalette.textMuted),
             ],
           ),
         ],

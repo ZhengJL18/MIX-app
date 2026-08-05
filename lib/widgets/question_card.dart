@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'rich_content.dart';
 
 /// 题目卡片 — 展示题干 + 选择题选项单选。
@@ -39,7 +39,7 @@ class QuestionCard extends StatelessWidget {
         SizedBox(height: 24),
         // 选项
         if (options.isNotEmpty) ...[
-          Text('请选择答案', style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13)),
+          Text('请选择答案', style: TextStyle(color: context.appPalette.textMuted, fontSize: 13)),
           const SizedBox(height: 12),
           for (var i = 0; i < options.length; i++)
             _OptionButton(
@@ -53,14 +53,14 @@ class QuestionCard extends StatelessWidget {
         ] else ...[
           Text(
             '（该题暂无选项，下滑查看答案后继续下一题）',
-            style: TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
+            style: TextStyle(color: context.appPalette.textMuted, fontSize: 13),
           ),
         ],
       ],
     );
 
     return Container(
-      color: AppColors.lightBg,
+      color: context.appPalette.bg,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,12 +70,12 @@ class QuestionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
+                  color: context.appPalette.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '单选题',
-                  style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: context.appPalette.primary, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -128,10 +128,10 @@ class _OptionButton extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primaryLight : AppColors.lightSurface,
+            color: selected ? context.appPalette.primaryLight : context.appPalette.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.lightDivider,
+              color: selected ? context.appPalette.primary : context.appPalette.divider,
               width: selected ? 2 : 1,
             ),
           ),
@@ -144,16 +144,16 @@ class _OptionButton extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: selected ? AppColors.primary : Colors.transparent,
+                  color: selected ? context.appPalette.primary : Colors.transparent,
                   border: Border.all(
-                    color: selected ? AppColors.primary : AppColors.lightTextMuted,
+                    color: selected ? context.appPalette.primary : context.appPalette.textMuted,
                     width: 2,
                   ),
                 ),
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: selected ? Colors.white : AppColors.lightTextMuted,
+                    color: selected ? Colors.white : context.appPalette.textMuted,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -163,7 +163,7 @@ class _OptionButton extends StatelessWidget {
               Expanded(
                 child: RichContent(
                   content: option,
-                  style: TextStyle(color: AppColors.lightText, fontSize: 15, height: 1.5),
+                  style: TextStyle(color: context.appPalette.text, fontSize: 15, height: 1.5),
                 ),
               ),
             ],

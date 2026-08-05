@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../engine/feedback_v2.dart';
 
 /// 错因反馈卡片 — 主因（必选）+ 辅因（可选）
@@ -31,7 +31,7 @@ class FeedbackCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.error_outline, color: AppColors.wrong, size: 22),
+            Icon(Icons.error_outline, color: context.appPalette.wrong, size: 22),
             const SizedBox(width: 8),
             Text('错因分析', style: t.headlineMedium?.copyWith(fontSize: 20)),
           ],
@@ -44,7 +44,7 @@ class FeedbackCard extends StatelessWidget {
           label: e.key,
           hint: e.value,
           selected: mainCause == e.key,
-          color: AppColors.wrong,
+          color: context.appPalette.wrong,
           onTap: () => onMainCauseChanged(mainCause == e.key ? null : e.key),
         )),
         const SizedBox(height: 20),
@@ -55,7 +55,7 @@ class FeedbackCard extends StatelessWidget {
           label: e.key,
           hint: e.value,
           selected: minorCause == e.key,
-          color: AppColors.secondary,
+          color: context.appPalette.secondary,
           onTap: () => onMinorCauseChanged(minorCause == e.key ? null : e.key),
         )),
         const SizedBox(height: 16),
@@ -63,7 +63,7 @@ class FeedbackCard extends StatelessWidget {
           child: Text(
             mainCause == null ? '请先选择主因' : '主因已选 ✓',
             style: TextStyle(
-              color: mainCause == null ? AppColors.lightTextMuted.withValues(alpha: 0.5) : AppColors.lightTextMuted,
+              color: mainCause == null ? context.appPalette.textMuted.withValues(alpha: 0.5) : context.appPalette.textMuted,
               fontSize: 14,
             ),
           ),
@@ -99,10 +99,10 @@ class _CauseButton extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.1) : AppColors.lightSurface,
+            color: selected ? color.withValues(alpha: 0.1) : context.appPalette.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? color : AppColors.lightDivider,
+              color: selected ? color : context.appPalette.divider,
               width: selected ? 2 : 1,
             ),
           ),
@@ -115,7 +115,7 @@ class _CauseButton extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: selected ? color : Colors.transparent,
                   border: Border.all(
-                    color: selected ? color : AppColors.lightTextMuted,
+                    color: selected ? color : context.appPalette.textMuted,
                     width: 2,
                   ),
                 ),
@@ -128,7 +128,7 @@ class _CauseButton extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text(hint, style: TextStyle(fontSize: 12, color: AppColors.lightTextMuted)),
+                  Text(hint, style: TextStyle(fontSize: 12, color: context.appPalette.textMuted)),
                 ],
               ),
             ],

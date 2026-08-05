@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// 富文本渲染 — 支持 Markdown 文本 + LaTeX 公式。
 ///
@@ -142,11 +142,11 @@ class _SafeMath extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mathStyle = style?.copyWith(
-          color: AppColors.primary,
+          color: context.appPalette.primary,
           fontWeight: FontWeight.w600,
         ) ??
         TextStyle(
-          color: AppColors.primary,
+          color: context.appPalette.primary,
           fontSize: 15,
           fontWeight: FontWeight.w600,
         );
