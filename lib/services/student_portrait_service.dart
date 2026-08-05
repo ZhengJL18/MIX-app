@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../db/database_helper.dart';
+import '../repository/kp_repository.dart';
 import '../repository/subject_repository.dart';
 import 'ai_service.dart';
 
@@ -12,13 +13,14 @@ import 'ai_service.dart';
 /// 3. 近况：practice_records 派生的滚动日志，查询时 LIMIT 20，不落盘。
 /// 4. 教学记忆（学生为什么错/下次怎么教）只由 Agent 写，活在 0号文件内。
 ///
-/// 出题侧（PromptBuilder v2）吃 0号文件 + 近20题日志，而不是裸数字四维。
+/// 出题侧吃 0号文件 + 近20题日志 + 知识点级实时状态，而不是裸数字四维。
 class StudentPortraitService {
   StudentPortraitService({AiService? aiService})
       : _ai = aiService ?? MockAiService();
 
   final AiService _ai;
   final SubjectRepository _subjectRepo = SubjectRepository();
+  final KpRepository _kpRepo = KpRepository();
 
   static const String _libraryRoot = '/data/data/com.mix.mix_app/files/subject_library';
   static const String _profileName = '0_profile.md';
@@ -115,37 +117,72 @@ class StudentPortraitService {
     return buf.toString();
   }
 
-  /// 某科目画像的"摘要"（节俭版：只读首节能力概况 + 近10题对错），
-  /// 供主代理在选科时并行对比各科，不必读每科全文。
-  Future<String> profileSummary({
-    required int userId,
-    required int subjectId,
-  }) async {
+  /// 进度档位占位符，不是真知识点，planner 选点必须跳过。
+  static const Set<String> _placeholderKp = {'还没开始', '已经学完'};
+
+  /// 某科目**知识点级**实时状态（从 practice_records 实时算，排除占位符），
+  /// 供 planner 决定具体练哪个知识点。这是难度体系对接的核心：
+  /// 让 planner 看到每个真知识点的练习情况，选没练过/做错的，而不是
+  /// 靠缓存画像猜 kp_id。
+  Future<String> subjectKpStatus(int userId, int subjectId) async {
     final subject = await _subjectRepo.getSubjectById(subjectId);
     final name = subject?['name'] as String? ?? '(未知科目)';
 
-    // 首节能力概况（画像存在才读，避免 mock/未生成时读空）
-    String overview = '';
-    final file = await _profileFile(subjectId);
-    if (await file.exists()) {
-      final content = await file.readAsString();
-      final m = RegExp(r'##\s*一、能力概况[^\n]*\n(.*?)(?=\n##\s|\Z)',
-              dotAll: true)
-          .firstMatch(content);
-      overview = m?.group(1)?.trim().replaceAll('\n', '；') ?? '';
+    final kps = await _kpRepo.getKpsBySubject(subjectId);
+    final realKps = kps
+        .where((k) => !_placeholderKp.contains(k['name']))
+        .toList();
+    if (realKps.isEmpty) return '$name: 无练习知识点';
+
+    // 该科所有 kp 的做题统计（一次 SQL）
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT q.kp_id AS kp_id, COUNT(*) AS cnt, SUM(pr.correct) AS correct
+      FROM practice_records pr
+      JOIN questions q ON q.id = pr.question_id
+      JOIN knowledge_points kp ON kp.id = q.kp_id
+      WHERE pr.user_id = ? AND kp.subject_id = ?
+      GROUP BY q.kp_id
+    ''', [userId, subjectId]);
+    final statByKp = {for (final r in rows) r['kp_id'] as int: r};
+
+    final practiced = <String>[];
+    final unpracticed = <String>[];
+    for (final kp in realKps) {
+      final kid = kp['id'] as int;
+      final kn = kp['name'] as String;
+      final st = statByKp[kid];
+      if (st == null) {
+        unpracticed.add(kn);
+      } else {
+        final cnt = st['cnt'] as int;
+        final ok = st['correct'] as int? ?? 0;
+        practiced.add('$kn（${cnt}题${ok == cnt ? '全对' : '对$ok错${cnt - ok}'}）');
+      }
     }
 
-    // 近10题对错（从近况日志里取计数行）
-    final recent = await recentLog(userId: userId, subjectId: subjectId);
-    final countLine = recent
-        .split('\n')
-        .where((l) => l.contains('近10题'))
-        .join('；');
+    final buf = StringBuffer(name);
+    buf.writeln();
+    if (practiced.isNotEmpty) buf.writeln('  已练: ${practiced.join('、')}');
+    if (unpracticed.isNotEmpty) buf.writeln('  未练: ${unpracticed.join('、')}');
+    return buf.toString();
+  }
 
-    final parts = <String>['$name'];
-    if (overview.isNotEmpty) parts.add(overview);
-    if (countLine.isNotEmpty) parts.add(countLine);
-    return parts.join(' | ');
+  /// 某知识点的实时做题统计（供 generator 校准难度）。
+  Future<String> kpPracticeStats(int userId, int kpId) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt, SUM(pr.correct) AS correct
+      FROM practice_records pr
+      JOIN questions q ON q.id = pr.question_id
+      WHERE pr.user_id = ? AND q.kp_id = ?
+    ''', [userId, kpId]);
+    final cnt = rows.isEmpty ? 0 : (rows.first['cnt'] as int? ?? 0);
+    final ok = rows.isEmpty ? 0 : (rows.first['correct'] as int? ?? 0);
+    if (cnt == 0) return '该知识点尚无练习记录';
+    return ok == cnt
+        ? '该知识点已练 $cnt 题全部正确'
+        : '该知识点已练 $cnt 题对 $ok 错 ${cnt - ok}';
   }
 
   /// 作答后更新：做错 → 读旧画像 + 本题详情 + 近况 → LLM 全量重写 0号文件。
