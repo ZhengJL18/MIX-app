@@ -313,9 +313,9 @@ class _FullPageState extends State<_FullPage> {
     if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
   }
 
-  /// 猫咪贴图固定比例（预处理后 100×158），保持原貌不拉伸。
-  static const double _thumbW = 100;
-  static const double _thumbH = 158;
+  /// 猫咪贴图固定比例（原图 100×158，这里缩到 56×88），保持原貌不拉伸。
+  static const double _thumbW = 56;
+  static const double _thumbH = 88;
 
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
@@ -396,13 +396,15 @@ class _FullPageState extends State<_FullPage> {
                       width: _thumbW + 8,
                       child: Stack(
                         children: [
-                          // thumb（猫咪贴图，固定等比，PNG 自带透明）
+                          // thumb（猫咪贴图）
+                          // PNG 自带 alpha：透明区域透出背景，猫咪实心保持清晰。
+                          // 不用 Opacity 整体半透明（那会把猫咪也弄灰）。
+                          // 拖动时轻微放大作为反馈。
                           Positioned(
                             top: thumbTop,
                             right: 0,
-                            child: AnimatedOpacity(
-                              // 基础半透明保证透出感，拖动时清晰些
-                              opacity: _dragging ? 0.85 : 0.55,
+                            child: AnimatedScale(
+                              scale: _dragging ? 1.15 : 1.0,
                               duration: const Duration(milliseconds: 120),
                               child: SizedBox(
                                 width: _thumbW,
