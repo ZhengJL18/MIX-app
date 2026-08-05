@@ -1,6 +1,11 @@
-# mix_app
+# MIX 学习 App
 
-A new Flutter project.
+AI 驱动的学习应用：主/子代理出题、学生画像（0号文件）驱动难度、原生 Hermes 对话。
+
+## 自动更新
+
+- 每次 push 到 master → GitHub Actions 构建 release APK → 自动发布 GitHub Release
+- App 启动时检查最新 release，有新版弹窗提示，点"立即更新"下载安装
 
 ## Getting Started
 
