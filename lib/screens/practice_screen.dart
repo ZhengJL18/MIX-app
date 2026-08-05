@@ -253,19 +253,63 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 }
 
-/// 一页容器 — 内容可滚动（内滚到底再触发 PageView 翻页）。
-class _FullPage extends StatelessWidget {
+/// 一页容器 — 内容可溢出，但页内手势滚动禁用（避免跟 PageView 翻页抢手势）。
+///
+/// 手指滑动统一交给外层垂直 PageView 翻页（默认行为）；
+/// 内容超出屏幕时右侧出现滚动条，长内容只能拖动滚动条查看。
+class _FullPage extends StatefulWidget {
   final Widget child;
-  const _FullPage({super.key, required this.child});
+  const _FullPage({required this.child});
+
+  @override
+  State<_FullPage> createState() => _FullPageState();
+}
+
+class _FullPageState extends State<_FullPage> {
+  final ScrollController _ctrl = ScrollController();
+  bool _scrollable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(_checkScrollable);
+  }
+
+  void _checkScrollable() {
+    if (!_ctrl.hasClients) return;
+    final canScroll = _ctrl.position.maxScrollExtent > 0;
+    if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.removeListener(_checkScrollable);
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.lightBg,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        child: child,
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: (n) {
+          final canScroll = n.metrics.maxScrollExtent > 0;
+          if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
+          return false;
+        },
+        child: RawScrollbar(
+          controller: _ctrl,
+          // 内容超高才显示滚动条；拖动滚动条是页内唯一滚动方式
+          thumbVisibility: _scrollable,
+          interactive: true,
+          child: SingleChildScrollView(
+            controller: _ctrl,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: widget.child,
+          ),
+        ),
       ),
     );
   }
