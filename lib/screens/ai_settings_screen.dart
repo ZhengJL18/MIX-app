@@ -4,14 +4,12 @@ import 'package:provider/provider.dart';
 import '../data/preset_data.dart';
 import '../models/ai_settings.dart';
 import '../providers/app_state.dart';
-import '../services/agent_bridge.dart';
 import '../services/ai_service.dart';
 import '../theme/app_colors.dart';
 
-/// AI 设置页（二级页面）— 配置对话与本地 Hermes Agent 共用的模型。
+/// AI 设置页（二级页面）— 配置对话（原生 Hermes）与刷题出题共用的模型。
 class AiSettingsScreen extends StatefulWidget {
-  final AgentBridge agent;
-  const AiSettingsScreen({super.key, required this.agent});
+  const AiSettingsScreen({super.key});
 
   @override
   State<AiSettingsScreen> createState() => _AiSettingsScreenState();
@@ -44,7 +42,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   }
 
   Future<void> _loadCurrent() async {
-    final existing = await widget.agent.readAiSettings();
+    final existing = await AiSettings.load();
     _vendorId = existing?.vendorId ?? kAiVendors.first.id;
     _modelCtrl.text = existing?.model ?? kAiVendors.first.models.first;
     _keyCtrl.text = existing?.apiKey ?? '';
@@ -84,19 +82,19 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       baseUrl: base,
     );
 
-    // 同步给刷题出题（AppState）与 Hermes 本地 Agent
+    // 同步给刷题出题（AppState）；对话的原生 agent 每次 send 实时读配置
     final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
     if (mounted) {
       context.read<AppState>().configureAiService(
         OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key),
       );
     }
-    await widget.agent.applyAiSettings(settings);
+    await settings.save();
 
     if (!mounted) return;
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已保存，刷题出题与本地 Hermes 将使用此模型')),
+      const SnackBar(content: Text('已保存，刷题出题与原生 Hermes 将使用此模型')),
     );
     Navigator.of(context).pop(true);
   }

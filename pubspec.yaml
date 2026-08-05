@@ -53,10 +53,12 @@ dependencies:
   # 冷启动持久化
   shared_preferences: ^2.3.0
 
-  # Hermes bundle 解压（绕开 Android SELinux 对 tar 的限制）
-  archive: ^3.6.1
   flutter_math_fork: ^0.7.4
   flutter_markdown: ^0.7.7+1
+
+  # 原生 Hermes（纯 Dart agent 框架）依赖
+  xml: ^7.0.1
+  yaml: ^3.1.3
 
 dev_dependencies:
   flutter_test:
@@ -81,7 +83,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/mix-agent-bundle.tar.gz
     - assets/memes/
 
   # To add assets to your application, add an assets section, like this:

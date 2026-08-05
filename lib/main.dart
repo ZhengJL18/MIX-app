@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
-import 'theme/app_palette.dart';
 import 'theme/app_colors.dart';
 import 'providers/app_state.dart';
 import 'providers/theme_provider.dart';
@@ -16,10 +15,8 @@ import 'screens/subject_management_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/ai_settings_screen.dart';
 import 'screens/wrong_questions_screen.dart';
-import 'services/agent_bridge.dart';
-import 'services/ai_service.dart';
+import 'services/native_agent_bridge.dart';
 import 'models/message_block.dart';
-import 'data/preset_data.dart';
 import 'widgets/onboarding_flow.dart';
 
 void main() {
@@ -91,15 +88,14 @@ class AppEntry extends StatefulWidget {
 class _AppEntryState extends State<AppEntry> {
   bool? _onboardingComplete;
 
-  /// Hermes Agent 桥接层 — App 入口持有，onboarding 期间即后台解压预热
-  final AgentBridge _agent = AgentBridge();
+  /// 原生 Hermes Agent 桥接 — 进程内运行，App 入口持有。
+  final NativeAgentBridge _agent = NativeAgentBridge();
 
   @override
   void initState() {
     super.initState();
     _checkOnboarding();
-    // 首次启动就提前拉起 Hermes（后台解压/启动），
-    // 避免用户完成引导后才开始等 80MB 解压
+    // 预初始化记忆/会话存储（无解压/无子进程，很轻）
     _agent.start();
   }
 
@@ -122,10 +118,7 @@ class _AppEntryState extends State<AppEntry> {
       return _MainShell(agent: _agent);
     }
     return OnboardingFlow(
-      agent: _agent,
       onComplete: () async {
-        // onboarding 刚写入 AI 配置，重新同步给 Hermes（预热时可能用了空配置）
-        await _agent.applySavedSettings();
         if (mounted) setState(() => _onboardingComplete = true);
       },
     );
@@ -134,7 +127,7 @@ class _AppEntryState extends State<AppEntry> {
 
 /// 主界面框架
 class _MainShell extends StatefulWidget {
-  final AgentBridge agent;
+  final NativeAgentBridge agent;
   const _MainShell({required this.agent});
 
   @override
@@ -145,16 +138,8 @@ class _MainShellState extends State<_MainShell> {
   final PageController _pageController = PageController(initialPage: 1);
   int _currentPage = 1;
 
-  /// Hermes Agent 桥接层 — 由 App 入口传入（onboarding 期间已预热）
-  late final AgentBridge _agent = widget.agent;
-
-  /// AI 配置版本号 — 设置页保存后递增，通知 ChatScreen 重新加载模型
-  int _aiConfigVersion = 0;
-
-  /// Hermes 解压/启动进度（null = 未在解压，100 = 就绪）
-  int? _agentProgress;
-  String _agentStatus = '';
-  StreamSubscription? _agentSub;
+  /// 原生 Hermes Agent 桥接层 — 由 App 入口传入
+  late final NativeAgentBridge _agent = widget.agent;
 
   @override
   void initState() {
@@ -165,32 +150,10 @@ class _MainShellState extends State<_MainShell> {
         setState(() => _currentPage = page);
       }
     });
-    // 订阅 Hermes 进度事件（首次启动解压时全屏显示进度条）
-    _agentSub = _agent.events.listen((e) {
-      if (!mounted) return;
-      if (e is AgentBridgeProgress) {
-        setState(() {
-          _agentProgress = e.percent;
-          _agentStatus = e.status;
-        });
-        if (e.percent >= 100) {
-          // 解压完成，短暂展示后消失
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (mounted) setState(() => _agentProgress = null);
-          });
-        }
-      } else if (e is AgentBridgeError) {
-        if (mounted) setState(() => _agentProgress = null);
-      }
-    });
-    // 启动时拉起 Hermes Agent（异步，失败不阻塞主界面）
-    _agent.start();
   }
 
   @override
   void dispose() {
-    _agentSub?.cancel();
-    // agent 由 App 入口持有，此处只解绑订阅，不 dispose
     _pageController.dispose();
     super.dispose();
   }
@@ -209,7 +172,7 @@ class _MainShellState extends State<_MainShell> {
                   child: PageView(
                     controller: _pageController,
                     children: [
-                      _ChatScreen(agent: _agent, aiConfigVersion: _aiConfigVersion),
+                      _ChatScreen(agent: _agent),
                       const PracticeScreen(),
                       _FilesScreen(agent: _agent),
                     ],
@@ -218,9 +181,6 @@ class _MainShellState extends State<_MainShell> {
               ],
             ),
           ),
-          // Hermes 解压进度覆盖层（首次启动时显示）
-          if (_agentProgress != null)
-            _AgentProgressOverlay(percent: _agentProgress!, status: _agentStatus),
         ],
       ),
     );
@@ -258,14 +218,11 @@ class _MainShellState extends State<_MainShell> {
     );
   }
 
-  /// 打开 AI 设置页（设置保存后通知 ChatScreen 刷新）
+  /// 打开 AI 设置页（原生 agent 每次 send 实时读配置，无需通知刷新）
   Future<void> _openAiSettings() async {
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => AiSettingsScreen(agent: _agent)),
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
     );
-    if (changed == true && mounted) {
-      setState(() => _aiConfigVersion++);
-    }
   }
 
   /// 打开主题切换对话框。
@@ -410,70 +367,10 @@ class _MainShellState extends State<_MainShell> {
   }
 }
 
-/// Hermes 首次解压的全屏进度覆盖层
-class _AgentProgressOverlay extends StatelessWidget {
-  final int percent;
-  final String status;
-  const _AgentProgressOverlay({required this.percent, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.lightBg.withValues(alpha: 0.98),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.auto_awesome, color: AppColors.primary, size: 48),
-            SizedBox(height: 20),
-            Text(
-              '正在初始化学习环境...',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.lightText),
-            ),
-            SizedBox(height: 8),
-            Text(
-              '首次启动需解压内置 AI 引擎（只需一次）',
-              style: TextStyle(fontSize: 13, color: AppColors.lightTextMuted),
-            ),
-            SizedBox(height: 24),
-            // 进度条
-            Container(
-              width: 260,
-              height: 8,
-              decoration: BoxDecoration(
-                color: AppColors.lightDivider,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: (percent / 100).clamp(0.0, 1.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: 12),
-            Text(
-              '$percent% · $status',
-              style: TextStyle(fontSize: 13, color: AppColors.lightTextMuted),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// AI 对话页 — 优先用配置的外部 AI，Hermes 本地 Agent 作为补充状态显示
+/// AI 对话页 — 用原生 Hermes Agent（带工具/记忆）+ 云端直连兜底
 class _ChatScreen extends StatefulWidget {
-  final AgentBridge agent;
-
-  /// AI 配置版本号 — 设置页保存后递增，触发本页重新加载模型
-  final int aiConfigVersion;
-  const _ChatScreen({required this.agent, this.aiConfigVersion = 0});
+  final NativeAgentBridge agent;
+  const _ChatScreen({required this.agent});
 
   @override
   State<_ChatScreen> createState() => _ChatScreenState();
@@ -488,15 +385,12 @@ class _ChatScreenState extends State<_ChatScreen>
   bool _sending = false;
 
   // 切 tab 时不销毁本页（PageView 默认会 dispose 离开的页）。
-  // 保持存活 → _streamSub 不取消 → Hermes 回复在后台继续，
+  // 保持存活 → _streamSub 不取消 → Agent 回复在后台继续，
   // 切回来状态完整（用户要的"冻结当前状态"）。
   @override
   bool get wantKeepAlive => true;
 
-  StreamSubscription? _agentSub;
   StreamSubscription<MessageBlock>? _streamSub;
-
-  OpenAiCompatibleAiService? _ai;
 
   static const String _historyKey = 'chat_history_blocks';
   static const String _historyUserIdsKey = 'chat_history_user_ids';
@@ -504,77 +398,11 @@ class _ChatScreenState extends State<_ChatScreen>
   @override
   void initState() {
     super.initState();
-    _loadAi();
     _loadHistory();
-    _checkResumeTask();
-    // 订阅 Hermes 事件，状态变化（失败/就绪）时刷新顶部状态条
-    _agentSub = widget.agent.events.listen((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  /// 检查是否有未完成的任务 checkpoint（App 上次被杀时任务在跑），
-  /// 有则恢复对话历史并提示用户可继续。
-  Future<void> _checkResumeTask() async {
-    final cp = await widget.agent.loadCheckpoint();
-    if (cp == null || !mounted) return;
-    final inProgress = cp['in_progress'] == true;
-    final msgs = cp['messages'] as List<dynamic>? ?? [];
-    if (msgs.isEmpty) return;
-
-    // 用 checkpoint 的对话历史填充消息列表（作为恢复基础）
-    final blocks = <MessageBlock>[];
-    var isUser = true; // 交替推断角色
-    for (final m in msgs) {
-      final role = (m as Map)['role'] as String? ?? 'user';
-      final content = (m['content'] as String?) ?? '';
-      if (content.isEmpty) continue;
-      final tb = TextBlock(id: generateBlockId(), content: content);
-      if (role == 'user') _userMsgIds.add(tb.id);
-      blocks.add(tb);
-    }
-    if (blocks.isEmpty) return;
-    setState(() {
-      _messages.insertAll(0, blocks);
-    });
-
-    if (inProgress) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('检测到上次未完成的任务，可继续对话以恢复'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    }
-    _scrollToBottom();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ChatScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 设置页保存了新配置 → 重新加载 AI 服务
-    if (oldWidget.aiConfigVersion != widget.aiConfigVersion) {
-      _loadAi();
-    }
-  }
-
-  Future<void> _loadAi() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = prefs.getString('api_key') ?? '';
-    final model = prefs.getString('ai_model') ?? '';
-    final vendor = prefs.getString('ai_vendor') ?? '';
-    if (key.isEmpty || model.isEmpty || vendor.isEmpty) return;
-
-    final preset = kAiVendors.where((v) => v.id == vendor).firstOrNull;
-    final base = preset?.baseUrl ?? prefs.getString('ai_base_url') ?? '';
-    if (base.isEmpty) return;
-    final url = base.endsWith('/chat/completions') ? base : '$base/chat/completions';
-    setState(() => _ai = OpenAiCompatibleAiService(baseUrl: url, model: model, apiKey: key));
   }
 
   @override
   void dispose() {
-    _agentSub?.cancel();
     _streamSub?.cancel();
     _input.dispose();
     _scroll.dispose();
@@ -633,8 +461,7 @@ class _ChatScreenState extends State<_ChatScreen>
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
-    final hermesUp = widget.agent.isRunning;
-    if (!hermesUp && _ai == null) return;
+    // 原生 agent 进程内随时可用；无配置时 send 会给出友好错误块
     _input.clear();
     setState(() {
       final um = TextBlock(id: generateBlockId(), content: text);
@@ -645,41 +472,7 @@ class _ChatScreenState extends State<_ChatScreen>
     _persistHistory();
     _scrollToBottom();
 
-    // 云端直连优先：快、真流式，体验最好。Hermes（agent）较慢，
-    // 保留但仅在未配云端 key 时兜底。Hermes 本地就绪也走云端更快。
-    final useCloud = _ai != null;
-    if (useCloud) {
-      // Hermes 未就绪时回退外部 AI（同样流式渲染）
-      try {
-        final textBlock = TextBlock(id: generateBlockId(), isStreaming: true);
-        setState(() => _messages.add(textBlock));
-        await for (final delta in _ai!.chatStream(text)) {
-          if (!mounted) return;
-          textBlock.append(delta);
-          setState(() => _upsertBlock(textBlock));
-          // 每个 chunk 都持久化：流式到一半被杀，已显示文本不丢
-          _persistHistory();
-          _scrollToBottom();
-        }
-        if (mounted) {
-          textBlock.finish();
-          setState(() => _upsertBlock(textBlock));
-          _sending = false;
-        }
-        _persistHistory();
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _messages.add(TextBlock(id: generateBlockId(), content: '⚠️ $e', isError: true));
-          _sending = false;
-        });
-        _persistHistory();
-      }
-      _scrollToBottom();
-      return;
-    }
-
-    // 本地 Hermes Agent（与 App 共用同一模型）
+    // 原生 Hermes Agent（进程内，带记忆/文件/网络工具，与 App 共用同一模型）
     final history = _messages
         .whereType<TextBlock>()
         .toList()
@@ -819,42 +612,20 @@ class _ChatScreenState extends State<_ChatScreen>
       color: AppColors.lightBg,
       child: Column(
         children: [
-          // 顶部 Hermes 状态条
+          // 顶部 Agent 状态条（原生 Hermes 进程内运行，恒就绪）
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(
               children: [
-                Icon(Icons.bolt,
-                    size: 14,
-                    color: widget.agent.isRunning
-                        ? AppColors.correct
-                        : widget.agent.hasFailed
-                            ? AppColors.wrong
-                            : AppColors.lightTextMuted),
+                Icon(Icons.bolt, size: 14, color: AppColors.correct),
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    widget.agent.isRunning
-                        ? 'Hermes 本地已就绪'
-                        : widget.agent.hasFailed
-                            ? 'Hermes 启动失败'
-                            : '云端 AI 对话（本地 Hermes 尚未就绪）',
+                    '原生 Hermes Agent 已就绪',
                     style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
                   ),
                 ),
-                if (widget.agent.hasFailed)
-                  GestureDetector(
-                    onTap: () => widget.agent.start(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.wrong.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('重试',
-                          style: TextStyle(color: AppColors.wrong, fontSize: 12, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
+
               ],
             ),
           ),
@@ -888,12 +659,10 @@ class _ChatScreenState extends State<_ChatScreen>
                 Expanded(
                   child: TextField(
                     controller: _input,
-                    enabled: (widget.agent.isRunning || _ai != null) && !_sending,
+                    enabled: !_sending,
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
-                      hintText: (widget.agent.isRunning || _ai != null)
-                          ? '输入问题...'
-                          : '请先在设置中配置 AI',
+                      hintText: '输入问题...',
                       hintStyle: TextStyle(color: AppColors.lightTextMuted),
                       filled: true,
                       fillColor: Colors.white,
@@ -907,17 +676,13 @@ class _ChatScreenState extends State<_ChatScreen>
                 ),
                 SizedBox(width: 8),
                 GestureDetector(
-                  onTap: _sending
-                      ? _stopStreaming
-                      : ((widget.agent.isRunning || _ai != null) ? _send : null),
+                  onTap: _sending ? _stopStreaming : _send,
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _sending
                           ? AppColors.lightTextMuted
-                          : (widget.agent.isRunning || _ai != null)
-                              ? AppColors.primary
-                              : AppColors.lightDivider,
+                          : AppColors.primary,
                       shape: BoxShape.circle,
                     ),
                     child: _sending
@@ -1025,9 +790,9 @@ class _ToolCallBubbleState extends State<_ToolCallBubble> {
   }
 }
 
-/// 文件管理页 — 显示 Hermes 本地引擎运行状态、AI 配置状态与数据说明
+/// 文件管理页 — 显示原生 Hermes Agent 状态、AI 配置状态与数据说明
 class _FilesScreen extends StatefulWidget {
-  final AgentBridge agent;
+  final NativeAgentBridge agent;
   const _FilesScreen({required this.agent});
 
   @override
@@ -1035,22 +800,12 @@ class _FilesScreen extends StatefulWidget {
 }
 
 class _FilesScreenState extends State<_FilesScreen> {
-  StreamSubscription? _agentSub;
   bool _aiConfigured = false;
 
   @override
   void initState() {
     super.initState();
-    _agentSub = widget.agent.events.listen((_) {
-      if (mounted) setState(() {});
-    });
     _checkAi();
-  }
-
-  @override
-  void dispose() {
-    _agentSub?.cancel();
-    super.dispose();
   }
 
   Future<void> _checkAi() async {
@@ -1061,7 +816,6 @@ class _FilesScreenState extends State<_FilesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final agent = widget.agent;
     return Container(
       color: AppColors.lightBg,
       child: ListView(
@@ -1069,22 +823,9 @@ class _FilesScreenState extends State<_FilesScreen> {
         children: [
           _InfoCard(
             icon: Icons.auto_awesome,
-            title: '本地 AI 引擎（Hermes）',
-            subtitle: agent.isRunning
-                ? '已就绪，可在 AI 对话页直接使用本地 Agent'
-                : agent.hasFailed
-                    ? '启动失败，请点击重试'
-                    : agent.isInitialized
-                        ? '环境已解压，正在启动…'
-                        : '首次启动需要解压内置引擎（约 80MB）',
-            trailing: agent.hasFailed
-                ? TextButton(onPressed: () => agent.start(), child: const Text('重试'))
-                : agent.isRunning
-                    ? Icon(Icons.check_circle, color: AppColors.correct, size: 20)
-                    : SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
-                      ),
+            title: '原生 Hermes Agent',
+            subtitle: '进程内运行，带记忆/文件/网络工具，可直接在 AI 对话页使用',
+            trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
           ),
           SizedBox(height: 12),
           _InfoCard(

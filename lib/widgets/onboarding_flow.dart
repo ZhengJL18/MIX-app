@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_state.dart';
-import '../services/agent_bridge.dart';
 import '../services/ai_service.dart';
 import '../repository/subject_repository.dart';
 import '../repository/kp_repository.dart';
@@ -18,11 +15,7 @@ import 'ai_progress_slider.dart';
 class OnboardingFlow extends StatefulWidget {
   final VoidCallback onComplete;
 
-  /// 可选：Hermes Agent 桥接层。传入后在引导期间显示
-  /// 后台解压进度横幅（首次启动时）。
-  final AgentBridge? agent;
-
-  const OnboardingFlow({super.key, required this.onComplete, this.agent});
+  const OnboardingFlow({super.key, required this.onComplete});
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();
@@ -38,44 +31,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   final Map<String, int> _subjectProgress = {}; // 科目名 → 档位索引
   final List<String> _customSubjects = [];
 
-  // Hermes 后台解压进度（0~100，null = 尚未开始/已完成）
-  int? _agentProgress;
-  String _agentStatus = '';
-  StreamSubscription? _agentSub;
-
   // AI 推荐缓存的科目和档位
   List<Map<String, dynamic>> _aiRecommendedSubjects = [];
   bool _aiLoading = false;
 
   // 各步的模型列表（选厂商后填充）
   List<String> _availableModels = [];
-
-  @override
-  void initState() {
-    super.initState();
-    // 订阅 Hermes 后台解压进度，显示顶部横幅
-    final agent = widget.agent;
-    if (agent != null) {
-      _agentSub = agent.events.listen((e) {
-        if (!mounted) return;
-        if (e is AgentBridgeProgress) {
-          setState(() {
-            _agentProgress = e.percent;
-            _agentStatus = e.status;
-          });
-        } else if (e is AgentBridgeStatus && e.type == 'agent_ready') {
-          // 已就绪 → 收起横幅
-          setState(() => _agentProgress = null);
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _agentSub?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,14 +119,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                 child: const Text('跳过', style: TextStyle(fontSize: 14)),
               ),
             ),
-            // 后台解压进度横幅（首次启动，Hermes 未就绪时）
-            if (_agentProgress != null)
-              Positioned(
-                top: 8,
-                left: 0,
-                right: 0,
-                child: _AgentPrepBanner(percent: _agentProgress!),
-              ),
           ],
         ),
       ),
@@ -1035,52 +988,6 @@ class _StatLine extends StatelessWidget {
         const SizedBox(width: 10),
         Text(text, style: const TextStyle(fontSize: 16)),
       ],
-    );
-  }
-}
-
-/// 引导页顶部的小进度横幅 — 显示后台解压学习环境的进度
-class _AgentPrepBanner extends StatelessWidget {
-  final int percent;
-  const _AgentPrepBanner({required this.percent});
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = percent.clamp(0, 100);
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.lightSurface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-            ),
-            SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                '学习环境准备中 $pct%',
-                style: TextStyle(color: AppColors.lightTextMuted, fontSize: 12),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
