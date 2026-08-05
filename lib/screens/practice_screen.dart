@@ -285,7 +285,6 @@ class _FullPageState extends State<_FullPage> {
   bool _scrollable = false;
 
   // 滚动条状态（比例 0~1）
-  double _thumbExtent = 0; // thumb 高度占比
   double _thumbOffset = 0; // thumb 顶部偏移占比（相对可滚动距离）
   bool _dragging = false;
   double _trackHeight = 0;
@@ -306,7 +305,6 @@ class _FullPageState extends State<_FullPage> {
     setState(() {
       final pos = _ctrl.position;
       final range = pos.maxScrollExtent;
-      _thumbExtent = pos.viewportDimension / (range + pos.viewportDimension);
       _thumbOffset = range > 0 ? pos.pixels / range : 0;
     });
   }
@@ -315,11 +313,9 @@ class _FullPageState extends State<_FullPage> {
     if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
   }
 
-  /// thumb 实际高度：按内容占比 + 最小 72px（保证猫咪图足够可见）。
-  double get _thumbHeight {
-    final h = 12 + _trackHeight * _thumbExtent;
-    return h.clamp(72.0, _trackHeight).toDouble();
-  }
+  /// 猫咪贴图固定比例（原图 726×1150），保持原貌不拉伸。
+  static const double _thumbW = 52;
+  static const double _thumbH = 52 * 1150 / 726; // ≈82
 
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
@@ -363,9 +359,9 @@ class _FullPageState extends State<_FullPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           _trackHeight = constraints.maxHeight;
-          final thumbHeight = _thumbHeight;
-          final thumbTop =
-              _thumbOffset.clamp(0.0, 1.0) * (_trackHeight - thumbHeight);
+          // 猫咪贴图固定大小，只随滚动上下移动，不随内容占比拉伸。
+          final thumbTop = _thumbOffset.clamp(0.0, 1.0) *
+              (_trackHeight - _thumbH);
 
           return Stack(
             children: [
@@ -400,7 +396,7 @@ class _FullPageState extends State<_FullPage> {
                       width: 56,
                       child: Stack(
                         children: [
-                          // thumb（猫咪图，PNG 自带透明）
+                          // thumb（猫咪贴图，固定等比，PNG 自带透明）
                           Positioned(
                             top: thumbTop,
                             right: 2,
@@ -408,11 +404,11 @@ class _FullPageState extends State<_FullPage> {
                               opacity: _dragging ? 1 : 0.9,
                               duration: const Duration(milliseconds: 120),
                               child: SizedBox(
-                                width: 52,
-                                height: thumbHeight,
+                                width: _thumbW,
+                                height: _thumbH,
                                 child: Image.asset(
                                   'assets/scrollbar/cat_thumb.png',
-                                  fit: BoxFit.cover,
+                                  fit: BoxFit.fill,
                                   alignment: Alignment.topCenter,
                                 ),
                               ),
