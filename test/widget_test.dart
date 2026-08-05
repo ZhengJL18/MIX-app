@@ -27,8 +27,8 @@ void main() {
   });
 
   testWidgets('AppPalette lerp 不崩溃', (WidgetTester tester) async {
-    final a = AppPalettePresets.warm;
-    final b = AppPalettePresets.night;
+    final a = AppPalettePresets.warmLight;
+    final b = AppPalettePresets.roseDark;
     final mixed = a.lerp(b, 0.5);
     expect(mixed.primary, isNotNull);
   });

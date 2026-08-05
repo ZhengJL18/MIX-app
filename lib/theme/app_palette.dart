@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 /// 统一色板 — ThemeExtension，随主题切换。
+///
+/// 配色从种子色经 Material 3 `ColorScheme.fromSeed` 生成（学原生 Hermes），
+/// 保证整套颜色协调、明暗自动适配，不再手工硬编码散乱色值。
 class AppPalette extends ThemeExtension<AppPalette> {
   final Color primary;
   final Color primaryLight;
@@ -35,6 +38,32 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.textMuted,
     required this.divider,
   });
+
+  /// 从种子色生成整套协调配色（Material 3 fromSeed）。
+  /// [seed] 主题种子色，[isDark] 决定明暗。
+  factory AppPalette.fromSeed(Color seed, {required bool isDark}) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: isDark ? Brightness.dark : Brightness.light,
+    );
+    return AppPalette(
+      primary: scheme.primary,
+      primaryLight: scheme.primaryContainer,
+      secondary: scheme.secondaryContainer,
+      accent: scheme.tertiary,
+      // 金色点缀固定用 amber 系（不参与协调生成，作为强调色）
+      gold: isDark ? const Color(0xFFFFD54F) : const Color(0xFFF9A825),
+      // 对/错语义色固定用 Material 标准绿/红，保证语义清晰
+      correct: isDark ? const Color(0xFF81C784) : const Color(0xFF2E7D32),
+      wrong: isDark ? const Color(0xFFEF9A9A) : const Color(0xFFC62828),
+      bg: scheme.surface,
+      surface: scheme.surfaceContainerHighest,
+      surfaceAlt: scheme.surfaceContainer,
+      text: scheme.onSurface,
+      textMuted: scheme.onSurfaceVariant,
+      divider: scheme.outlineVariant,
+    );
+  }
 
   @override
   AppPalette copyWith({
@@ -93,77 +122,42 @@ class AppPalette extends ThemeExtension<AppPalette> {
 /// 便捷扩展：从 BuildContext 取当前主题色板。
 extension AppColorsContext on BuildContext {
   AppPalette get appColors =>
-      Theme.of(this).extension<AppPalette>() ?? AppPalettePresets.warm;
+      Theme.of(this).extension<AppPalette>() ?? AppPalettePresets.warmLight;
 }
 
-/// 预设色板。
+/// 预设色板 — 每个主题两个 seed（亮/暗），经 fromSeed 生成。
+/// 对应原生 Hermes 的 5 套主题。
 abstract final class AppPalettePresets {
-  /// 暖橙（现在的多邻国暖色风格）
-  static const AppPalette warm = AppPalette(
-    primary: Color(0xFFFF6B35),
-    primaryLight: Color(0xFFFFF0E8),
-    secondary: Color(0xFFFFB347),
-    accent: Color(0xFFFF4D6D),
-    gold: Color(0xFFFFD700),
-    correct: Color(0xFF4ECDC4),
-    wrong: Color(0xFFFF6B6B),
-    bg: Color(0xFFFFF8F0),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFFFF0E0),
-    text: Color(0xFF2D1810),
-    textMuted: Color(0xFF8B7355),
-    divider: Color(0xFFE8DDD0),
-  );
+  /// 青绿
+  static final AppPalette tealLight =
+      AppPalette.fromSeed(const Color(0xFF00897B), isDark: false);
+  static final AppPalette tealDark =
+      AppPalette.fromSeed(const Color(0xFF4DB6AC), isDark: true);
 
-  /// 冷蓝（清爽学习风）
-  static const AppPalette cool = AppPalette(
-    primary: Color(0xFF4A90E2),
-    primaryLight: Color(0xFFE8F1FC),
-    secondary: Color(0xFF5EC8C0),
-    accent: Color(0xFF7C6FE0),
-    gold: Color(0xFFF5B841),
-    correct: Color(0xFF3EB489),
-    wrong: Color(0xFFE25563),
-    bg: Color(0xFFF4F8FC),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFEAF2FA),
-    text: Color(0xFF1A2733),
-    textMuted: Color(0xFF5E7A94),
-    divider: Color(0xFFDCE8F2),
-  );
+  /// 靛蓝
+  static final AppPalette indigoLight =
+      AppPalette.fromSeed(const Color(0xFF3F51B5), isDark: false);
+  static final AppPalette indigoDark =
+      AppPalette.fromSeed(const Color(0xFF7986CB), isDark: true);
 
-  /// 深棕（暖棕黑）
-  static const AppPalette midnight = AppPalette(
-    primary: Color(0xFFFF7A50),
-    primaryLight: Color(0xFF3D2218),
-    secondary: Color(0xFFFFC36B),
-    accent: Color(0xFFFF6D8A),
-    gold: Color(0xFFFFD700),
-    correct: Color(0xFF5BD6CD),
-    wrong: Color(0xFFFF7B7B),
-    bg: Color(0xFF1A0F0A),
-    surface: Color(0xFF2D1810),
-    surfaceAlt: Color(0xFF3D2218),
-    text: Color(0xFFFFF0E8),
-    textMuted: Color(0xFFA09080),
-    divider: Color(0xFF3D2D20),
-  );
+  /// 暖橙
+  static final AppPalette warmLight =
+      AppPalette.fromSeed(const Color(0xFFE65100), isDark: false);
+  static final AppPalette warmDark =
+      AppPalette.fromSeed(const Color(0xFFFFB74D), isDark: true);
 
-  /// 黑夜（纯黑科技风）
-  static const AppPalette night = AppPalette(
-    primary: Color(0xFF6C8CFF),
-    primaryLight: Color(0xFF1E2340),
-    secondary: Color(0xFF00C2A8),
-    accent: Color(0xFFFF5C8A),
-    gold: Color(0xFFFFC940),
-    correct: Color(0xFF00D4A0),
-    wrong: Color(0xFFFF6B6B),
-    bg: Color(0xFF0B0E14),
-    surface: Color(0xFF161A24),
-    surfaceAlt: Color(0xFF1F2533),
-    text: Color(0xFFECEFF5),
-    textMuted: Color(0xFF7C86A0),
-    divider: Color(0xFF2A3040),
-  );
+  /// 紫罗兰
+  static final AppPalette violetLight =
+      AppPalette.fromSeed(const Color(0xFF7B1FA2), isDark: false);
+  static final AppPalette violetDark =
+      AppPalette.fromSeed(const Color(0xFFBA68C8), isDark: true);
+
+  /// 玫瑰
+  static final AppPalette roseLight =
+      AppPalette.fromSeed(const Color(0xFFC2185B), isDark: false);
+  static final AppPalette roseDark =
+      AppPalette.fromSeed(const Color(0xFFF06292), isDark: true);
+
+  /// 旧名兼容（warm 默认浅色）。
+  static final AppPalette warm = warmLight;
 }
-

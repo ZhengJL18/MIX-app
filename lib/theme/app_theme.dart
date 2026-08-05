@@ -3,11 +3,13 @@ import 'app_colors.dart';
 import 'app_palette.dart';
 
 /// 主题标识 — 可持久化到 SharedPreferences。
+/// 对应原生 Hermes 的 5 套主题。
 enum AppThemeId {
+  teal('teal', '青绿'),
+  indigo('indigo', '靛蓝'),
   warm('warm', '暖橙'),
-  cool('cool', '冷蓝'),
-  midnight('midnight', '深棕'),
-  night('night', '黑夜');
+  violet('violet', '紫罗兰'),
+  rose('rose', '玫瑰');
 
   final String id;
   final String label;
@@ -21,48 +23,68 @@ enum AppThemeId {
   }
 }
 
+/// 一个主题的亮/暗种子色。
+class ThemeSeeds {
+  final Color lightSeed;
+  final Color darkSeed;
+  const ThemeSeeds(this.lightSeed, this.darkSeed);
+}
+
 class AppTheme {
   AppTheme._();
 
-  /// 主题色板表。
-  static const Map<AppThemeId, AppPalette> palettes = {
-    AppThemeId.warm: AppPalettePresets.warm,
-    AppThemeId.cool: AppPalettePresets.cool,
-    AppThemeId.midnight: AppPalettePresets.midnight,
-    AppThemeId.night: AppPalettePresets.night,
+  /// 主题 → 亮/暗种子色（学 Hermes：从种子生成整套协调色）。
+  static const Map<AppThemeId, ThemeSeeds> seeds = {
+    AppThemeId.teal: ThemeSeeds(Color(0xFF00897B), Color(0xFF4DB6AC)),
+    AppThemeId.indigo: ThemeSeeds(Color(0xFF3F51B5), Color(0xFF7986CB)),
+    AppThemeId.warm: ThemeSeeds(Color(0xFFE65100), Color(0xFFFFB74D)),
+    AppThemeId.violet: ThemeSeeds(Color(0xFF7B1FA2), Color(0xFFBA68C8)),
+    AppThemeId.rose: ThemeSeeds(Color(0xFFC2185B), Color(0xFFF06292)),
   };
+
+  /// 兼容旧引用：按 id+亮度返回生成的色板。
+  static AppPalette paletteFor(AppThemeId id, {required bool isDark}) {
+    final s = seeds[id]!;
+    return AppPalette.fromSeed(
+      isDark ? s.darkSeed : s.lightSeed,
+      isDark: isDark,
+    );
+  }
+
+  /// 主题色板表（亮色，供主题切换 UI 预览 primary 用）。
+  /// AppPalette 由 seed 运行时生成，无法 const，用 getter 按需生成。
+  static Map<AppThemeId, AppPalette> get palettes => {
+        for (final id in AppThemeId.values) id: paletteFor(id, isDark: false),
+      };
 
   /// 根据主题 id 和亮度构建 ThemeData。
   static ThemeData build(AppThemeId id, {required Brightness brightness}) {
-    final palette = palettes[id]!;
+    final isDark = brightness == Brightness.dark;
+    final palette = paletteFor(id, isDark: isDark);
     // 同步全局活动色板（AppColors.xxx 据此跟随主题）
     AppColors.palette = palette;
-    final isDark = brightness == Brightness.dark;
 
-    final ColorScheme scheme;
-    if (isDark) {
-      scheme = ColorScheme.dark(
-        primary: palette.primary,
-        secondary: palette.secondary,
-        tertiary: palette.accent,
-        surface: palette.surface,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
-        onSurface: palette.text,
-        onSurfaceVariant: palette.textMuted,
-      );
-    } else {
-      scheme = ColorScheme.light(
-        primary: palette.primary,
-        secondary: palette.secondary,
-        tertiary: palette.accent,
-        surface: palette.surface,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
-        onSurface: palette.text,
-        onSurfaceVariant: palette.textMuted,
-      );
-    }
+    final scheme = isDark
+        ? ColorScheme.dark(
+            primary: palette.primary,
+            secondary: palette.secondary,
+            tertiary: palette.accent,
+            surface: palette.bg,
+            onPrimary: Colors.white,
+            onSecondary: Colors.white,
+            onSurface: palette.text,
+            onSurfaceVariant: palette.textMuted,
+          )
+        : ColorScheme.light(
+            primary: palette.primary,
+            secondary: palette.secondary,
+            tertiary: palette.accent,
+            surface: palette.bg,
+            onPrimary: Colors.white,
+            onSecondary: Colors.white,
+            onSurface: palette.text,
+            onSurfaceVariant: palette.textMuted,
+          );
 
     return ThemeData(
       useMaterial3: true,
