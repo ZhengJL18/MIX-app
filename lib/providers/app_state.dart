@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/feedback_v2.dart';
+import '../engine/progress_engine.dart';
 import '../data/preset_data.dart';
 import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
@@ -31,6 +32,7 @@ class AppState extends ChangeNotifier {
   final KpStateRepository kpStateRepo = KpStateRepository();
   final QuestionRepository questionRepo = QuestionRepository();
   final PracticeRepository practiceRepo = PracticeRepository();
+  final ProgressEngine _progressEngine = ProgressEngine();
 
   AiService _aiService;
   late StudentPortraitService _portrait;
@@ -215,6 +217,13 @@ class AppState extends ChangeNotifier {
       'review_count': updated['review_count'],
       'last_review_at': updated['last_review_at'],
     });
+
+    // 5 阶段螺旋进度：每次作答更新（纯代码规则，零 token）
+    await _progressEngine.recordAnswer(
+      userId: kLocalUserId,
+      kpId: kpId,
+      correct: correct,
+    );
 
     // 做错才触发 LLM 重写学科画像；做对只走程序计数（近况由 SQL 派生）。
     // 不 await：画像重写是文件级 best-effort，不应阻塞作答提交。

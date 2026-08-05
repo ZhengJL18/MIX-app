@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import '../db/database_helper.dart';
-import '../repository/kp_repository.dart';
 import '../repository/subject_repository.dart';
 import 'ai_service.dart';
 
@@ -20,7 +19,6 @@ class StudentPortraitService {
 
   final AiService _ai;
   final SubjectRepository _subjectRepo = SubjectRepository();
-  final KpRepository _kpRepo = KpRepository();
 
   static const String _libraryRoot = '/data/data/com.mix.mix_app/files/subject_library';
   static const String _profileName = '0_profile.md';
@@ -114,57 +112,6 @@ class StudentPortraitService {
         buf.writeln(l);
       }
     }
-    return buf.toString();
-  }
-
-  /// 进度档位占位符，不是真知识点，planner 选点必须跳过。
-  static const Set<String> _placeholderKp = {'还没开始', '已经学完'};
-
-  /// 某科目**知识点级**实时状态（从 practice_records 实时算，排除占位符），
-  /// 供 planner 决定具体练哪个知识点。这是难度体系对接的核心：
-  /// 让 planner 看到每个真知识点的练习情况，选没练过/做错的，而不是
-  /// 靠缓存画像猜 kp_id。
-  Future<String> subjectKpStatus(int userId, int subjectId) async {
-    final subject = await _subjectRepo.getSubjectById(subjectId);
-    final name = subject?['name'] as String? ?? '(未知科目)';
-
-    final kps = await _kpRepo.getKpsBySubject(subjectId);
-    final realKps = kps
-        .where((k) => !_placeholderKp.contains(k['name']))
-        .toList();
-    if (realKps.isEmpty) return '$name: 无练习知识点';
-
-    // 该科所有 kp 的做题统计（一次 SQL）
-    final db = await DatabaseHelper.instance.database;
-    final rows = await db.rawQuery('''
-      SELECT q.kp_id AS kp_id, COUNT(*) AS cnt, SUM(pr.correct) AS correct
-      FROM practice_records pr
-      JOIN questions q ON q.id = pr.question_id
-      JOIN knowledge_points kp ON kp.id = q.kp_id
-      WHERE pr.user_id = ? AND kp.subject_id = ?
-      GROUP BY q.kp_id
-    ''', [userId, subjectId]);
-    final statByKp = {for (final r in rows) r['kp_id'] as int: r};
-
-    final practiced = <String>[];
-    final unpracticed = <String>[];
-    for (final kp in realKps) {
-      final kid = kp['id'] as int;
-      final kn = kp['name'] as String;
-      final st = statByKp[kid];
-      if (st == null) {
-        unpracticed.add(kn);
-      } else {
-        final cnt = st['cnt'] as int;
-        final ok = st['correct'] as int? ?? 0;
-        practiced.add('$kn（${cnt}题${ok == cnt ? '全对' : '对$ok错${cnt - ok}'}）');
-      }
-    }
-
-    final buf = StringBuffer(name);
-    buf.writeln();
-    if (practiced.isNotEmpty) buf.writeln('  已练: ${practiced.join('、')}');
-    if (unpracticed.isNotEmpty) buf.writeln('  未练: ${unpracticed.join('、')}');
     return buf.toString();
   }
 

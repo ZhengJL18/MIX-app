@@ -21,7 +21,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'mix.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         // WAL 模式可大幅提升并发读性能，但部分 Android 系统的 SQLite
         // 实现中 PRAGMA 可能因底层文件系统/路径问题报错。
@@ -41,6 +41,25 @@ class DatabaseHelper {
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE questions ADD COLUMN options TEXT');
           await db.execute('ALTER TABLE questions ADD COLUMN explanation TEXT');
+        }
+        // v2 → v3：kp_progress 表（5 阶段螺旋进度）
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE kp_progress (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL,
+              kp_id INTEGER NOT NULL REFERENCES knowledge_points(id),
+              stage INTEGER NOT NULL DEFAULT 0,
+              stage_correct INTEGER NOT NULL DEFAULT 0,
+              stage_total INTEGER NOT NULL DEFAULT 0,
+              total_correct INTEGER NOT NULL DEFAULT 0,
+              total_done INTEGER NOT NULL DEFAULT 0,
+              last_review_at TEXT,
+              next_review_at TEXT,
+              UNIQUE(user_id, kp_id)
+            )
+          ''');
+          await db.execute('CREATE INDEX idx_kpp_user ON kp_progress(user_id)');
         }
       },
     );
@@ -133,6 +152,24 @@ class DatabaseHelper {
     ''');
     batch.execute('CREATE INDEX idx_pr_user_correct ON practice_records(user_id, correct)');
     batch.execute('CREATE INDEX idx_pr_question ON practice_records(question_id)');
+
+    // 1.6 kp_progress（5 阶段螺旋进度）
+    batch.execute('''
+      CREATE TABLE kp_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        kp_id INTEGER NOT NULL REFERENCES knowledge_points(id),
+        stage INTEGER NOT NULL DEFAULT 0,
+        stage_correct INTEGER NOT NULL DEFAULT 0,
+        stage_total INTEGER NOT NULL DEFAULT 0,
+        total_correct INTEGER NOT NULL DEFAULT 0,
+        total_done INTEGER NOT NULL DEFAULT 0,
+        last_review_at TEXT,
+        next_review_at TEXT,
+        UNIQUE(user_id, kp_id)
+      )
+    ''');
+    batch.execute('CREATE INDEX idx_kpp_user ON kp_progress(user_id)');
 
     await batch.commit(noResult: true);
   }

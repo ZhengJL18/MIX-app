@@ -1,8 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart' show debugPrint;
 
-import '../db/database_helper.dart';
+import '../engine/progress_engine.dart';
 import '../hermes/agent/agent.dart';
 import '../hermes/llm/openai_llm.dart';
 import '../models/ai_settings.dart';
@@ -15,13 +13,11 @@ import 'student_portrait_service.dart';
 /// 主/子代理出题调度器。
 ///
 /// 结构：
-///   planner JailerAgent   读各科知识点级状态(节俭) → 决策科目+知识点
+///   代码螺旋选点(5阶段进度) → 决策科目+知识点
 ///   generator JailerAgent 读该科画像全文+近20题 → 出一题(Markdown)
 ///
-/// 两个都是完整 agent 循环，但编排由本 service 控制：
-/// 先跑 planner 拿结构化决策，再跑 generator 出题，最后落库。
-///
-/// 防重复：已按用户要求移除（遇到重复题手动刷新）。保留预生成池。
+/// 编排由本 service 控制：选点(代码) → generator 出题 → 落库。
+/// 防重复：prompt 硬性禁止与近况重复（移除代码判重，遇重复手动刷新）。
 class QuestionAgentService {
   QuestionAgentService({
     QuestionRepository? questionRepo,
@@ -32,6 +28,8 @@ class QuestionAgentService {
         _subjectRepo = subjectRepo ?? SubjectRepository(),
         _kpRepo = kpRepo ?? KpRepository(),
         _portrait = portraitService ?? StudentPortraitService();
+
+  final ProgressEngine _progressEngine = ProgressEngine();
 
   final QuestionRepository _questionRepo;
   final SubjectRepository _subjectRepo;
@@ -53,6 +51,62 @@ class QuestionAgentService {
     _recentKpIds.remove(kpId);
     _recentKpIds.insert(0, kpId);
     if (_recentKpIds.length > _recentKpMax) _recentKpIds.removeLast();
+  }
+
+  /// 螺旋计数：练满 [SpiralRules.reviewEvery] 道新题，插入 1 道旧知识点回顾。
+  int _newQuestionCount = 0;
+
+  /// 螺旋选点：聚焦"距离达标最近"的知识点；每练 N 新回 1 旧。
+  /// 返回 (subjectId, kpId)。
+  Future<(int, int)> _spiralSelect(int userId) async {
+    final subjects = await _subjectRepo.getAllSubjects();
+    final engine = ProgressEngine();
+
+    // 收集所有科目的真知识点进度
+    final all = <(int, int, String, KpProgress)>[]; // (subjectId, kpId, name, progress)
+    for (final subj in subjects) {
+      final progresses = await engine.subjectProgresses(userId, subj['id'] as int);
+      for (final (kid, name, p) in progresses) {
+        all.add((subj['id'] as int, kid, name, p));
+      }
+    }
+    if (all.isEmpty) throw StateError('请先创建科目和知识点');
+
+    // 螺旋回顾：练满 N 新，回 1 旧（选最近练过、非当前聚焦的知识点）
+    if (_newQuestionCount >= SpiralRules.reviewEvery) {
+      _newQuestionCount = 0;
+      final reviewCandidates = all
+          .where((e) => e.$4.totalDone > 0 && e.$4.stage > 0) // 练过且非S0
+          .toList();
+      if (reviewCandidates.isNotEmpty) {
+        // 选最近回顾时间最久远的（复习队列）
+        reviewCandidates.sort((a, b) {
+          final at = a.$4.lastReviewAt ?? '';
+          final bt = b.$4.lastReviewAt ?? '';
+          return at.compareTo(bt); // 字符串 ISO 时间可比较
+        });
+        final pick = reviewCandidates.first;
+        return (pick.$1, pick.$2);
+      }
+    }
+
+    // 正常聚焦：选"距达标最近"的知识点（remainingToReach 最小，优先未达标的）
+    final active = all.where((e) => !e.$4.reached).toList();
+    if (active.isEmpty) {
+      // 全达标 → 任意挑一个练（螺旋更高圈）
+      final pick = all.first;
+      return (pick.$1, pick.$2);
+    }
+    active.sort((a, b) {
+      // 先比"还差几题"（接近达标的优先），差题数相同比进度
+      final ra = a.$4.remainingToReach;
+      final rb = b.$4.remainingToReach;
+      if (ra != rb) return ra.compareTo(rb);
+      return b.$4.progress.compareTo(a.$4.progress);
+    });
+    final pick = active.first;
+    _newQuestionCount++;
+    return (pick.$1, pick.$2);
   }
 
   /// 取下一题：预生成池有货直接取；没有则跑完整 planner→generator 出题。
@@ -91,119 +145,10 @@ class QuestionAgentService {
     _inFlight[kpId] = future;
   }
 
-  /// 主代理：读各科**知识点级状态**，决策科目 + 知识点，返回 (subjectId, kpId)。
+  /// 选点：代码螺旋选点（聚焦接近达标 + 练4回1），返回 (subjectId, kpId)。
+  /// 不再依赖 LLM 猜 —— 5 阶段进度是确定性数据，代码直接算。
   Future<(int, int)> _plan(int userId, AiSettings settings) async {
-    final subjects = await _subjectRepo.getAllSubjects();
-    if (subjects.isEmpty) {
-      throw StateError('请先在「科目管理」创建科目和知识点');
-    }
-
-    // 知识点级状态（实时算，排除"还没开始/已经学完"占位符）。
-    // 这是难度体系对接的关键：planner 必须能看到每个真知识点练没练过，
-    // 才能选到该练的，而不是盯着第一个占位符。
-    final statuses = <String>[];
-    for (final subj in subjects) {
-      final s = await _portrait.subjectKpStatus(userId, subj['id'] as int);
-      statuses.add(s);
-    }
-    final statusBlock = statuses.join('\n');
-
-    // 近期已出题的 kp（科目/知识点轮换，避免连续刷同一块）
-    final recentKpNames = <String>[];
-    for (final kpId in _recentKpIds) {
-      final n = await _kpRepo.getKpName(kpId);
-      if (n != null && n.isNotEmpty) recentKpNames.add(n);
-    }
-    final recentKpBlock = recentKpNames.isEmpty
-        ? '（暂无）'
-        : recentKpNames.join('、');
-
-    final prompt = '''
-你是学习规划代理。根据以下各科目的知识点级状态，决定学生当前最该练哪个科目、哪个知识点。
-
-【各科目知识点状态】
-$statusBlock
-
-【近期刚出过题的知识点】（请避免连续选到它们）
-$recentKpBlock
-
-要求：输出 JSON（不要任何其他文字），格式：
-{"subject_id": <科目id>, "kp_id": <知识点id>, "reason": "<一句话理由>"}
-
-选点依据（按优先级）：
-1. 优先选"未练"的知识点（学生还没碰过的新知识点）。
-2. 其次选近期做错的（练习中"对M错K"里 K>0 的）。
-3. 不要选已经全对很多题的知识点（太简单）。
-4. 尽量避免与【近期刚出过题的知识点】重复 —— 换科目/换知识点练。
-''';
-
-    final planner = JailerAgent(
-      llm: OpenAiLlmClient(
-        config: LlmConfig(
-          baseUrl: settings.chatBaseUrl,
-          apiKey: settings.apiKey,
-          model: settings.model,
-        ),
-      ),
-      systemPrompt: '你是学习规划代理，只输出 JSON。',
-      toolDefinitionsProvider: () => const [],
-      maxIterations: 3,
-    );
-
-    final result = await planner.runConversation(prompt);
-    final text = result.finalResponse ?? '';
-    final json = _extractJson(text);
-
-    final subjectId = (json['subject_id'] as num?)?.toInt();
-    final kpId = (json['kp_id'] as num?)?.toInt();
-    // 校验：返回的 kp 必须是存在的真知识点（排除占位符）。
-    // LLM 瞎编 / 没按格式返回时，fallback 到第一个科目里第一个未练的真知识点。
-    final candidate = await _validateKp(subjectId, kpId);
-    if (candidate != null) return candidate;
-    return _fallbackKp(userId);
-  }
-
-  /// 校验 planner 返回的 (subjectId, kpId)：必须是真知识点（非占位符）。
-  Future<(int, int)?> _validateKp(int? subjectId, int? kpId) async {
-    if (subjectId == null || kpId == null) return null;
-    final kp = await _kpRepo.getKpById(kpId);
-    if (kp == null) return null;
-    final name = kp['name'] as String? ?? '';
-    if (name == '还没开始' || name == '已经学完') return null;
-    // kp 必须属于该科目
-    if ((kp['subject_id'] as num).toInt() != subjectId) return null;
-    return (subjectId, kpId);
-  }
-
-  /// 兜底：按科目顺序找第一个"未练的真知识点"。
-  Future<(int, int)> _fallbackKp(int userId) async {
-    final subjects = await _subjectRepo.getAllSubjects();
-    for (final subj in subjects) {
-      final sId = subj['id'] as int;
-      final kps = await _kpRepo.getKpsBySubject(sId);
-      final db = await DatabaseHelper.instance.database;
-      for (final kp in kps) {
-        final name = kp['name'] as String? ?? '';
-        if (name == '还没开始' || name == '已经学完') continue;
-        final kid = kp['id'] as int;
-        final rows = await db.rawQuery('''
-          SELECT COUNT(*) AS c FROM practice_records pr
-          JOIN questions q ON q.id = pr.question_id
-          WHERE pr.user_id = ? AND q.kp_id = ?
-        ''', [userId, kid]);
-        final cnt = rows.isEmpty ? 0 : (rows.first['c'] as int? ?? 0);
-        if (cnt == 0) return (sId, kid); // 第一个未练的真知识点
-      }
-    }
-    // 全练过了 → 退回第一科目第一真知识点
-    final first = subjects.first;
-    final fsId = first['id'] as int;
-    final kps = await _kpRepo.getKpsBySubject(fsId);
-    final real = kps.firstWhere(
-      (k) => k['name'] != '还没开始' && k['name'] != '已经学完',
-      orElse: () => kps.first,
-    );
-    return (fsId, real['id'] as int);
+    return _spiralSelect(userId);
   }
 
   /// 子代理：读该科画像全文 + 近况 + 该知识点实时统计，出一题（Markdown）。
@@ -221,13 +166,21 @@ $recentKpBlock
     final recent = await _portrait.recentLog(userId: userId, subjectId: subjectId);
     // 该知识点的实时做题统计 —— 校准难度的权威依据（画像可能过时）
     final kpStats = await _portrait.kpPracticeStats(userId, kpId);
+    // 5 阶段螺旋进度：当前阶段 + 阶段难度（难度随阶段爬升）
+    final progress = await _progressEngine.getProgress(userId, kpId);
+    final stageName = SpiralRules.stageNames[progress.stage];
+    final stageDiff = SpiralRules.stageDifficulty[progress.stage] ?? '基础概念入门题';
 
     final prompt = '''
 你是「${subject['name']}」老师，为学生出一道单选题。
 
 本次考察知识点：$kpName
 
-【该知识点实时做题情况】（难度校准的首要依据）
+【该知识点当前阶段】（难度权威依据）
+$stageName（第${progress.stage}阶段，本阶段已练${progress.stageTotal}题对${progress.stageCorrect}）
+本题必须出「$stageDiff」
+
+【该知识点实时做题情况】
 $kpStats
 
 【学生学科画像】
@@ -237,10 +190,12 @@ $profile
 $recent
 
 要求：
-1. 难度必须根据"该知识点实时做题情况"校准：
-   - 若已练多题全对 → 难度显著提升，出综合性/含陷阱/易错变形的题，别出送分题。
-   - 若已练且做错 → 针对错的点出同类题巩固。
-   - 若尚未练习 → 出该知识点的基础概念题，先建立掌握。
+1. 难度严格按当前阶段出：
+   - 第0/1阶段 → 基础概念/基础计算
+   - 第2阶段 → 综合应用（含变式）
+   - 第3阶段 → 易错陷阱
+   - 第4阶段 → 跨知识点综合
+   不要低于当前阶段的难度，也无需高于太多。
 2. 针对画像中的薄弱点与易错模式出题。
 3. 【硬性】「学生近况」里列出的题目都是已经做过的，你的题**严禁与其中任何一题重复或高度相似**（换数字/换字母不算新题）。必须换考点或换题型。
 4. 必须包含 4 个选项（A/B/C/D），且只有一个正确选项，干扰项合理。
@@ -315,25 +270,5 @@ D. [选项D]
     );
     _rememberKp(kpId); // 科目/知识点轮换：记录刚出的 kp
     return qid;
-  }
-
-  /// 从 agent 输出里提取 JSON（容忍 ```json 包裹 / 前后杂文字）。
-  Map<String, dynamic> _extractJson(String text) {
-    final fenced = RegExp(r'```(?:json)?\s*([\s\S]*?)```').firstMatch(text);
-    final raw = fenced?.group(1) ?? text;
-    try {
-      final decoded = jsonDecode(raw.trim());
-      if (decoded is Map<String, dynamic>) return decoded;
-    } catch (_) {}
-    // 兜底：找第一个 { 到最后一个 } 的区间
-    final start = raw.indexOf('{');
-    final end = raw.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      try {
-        final decoded = jsonDecode(raw.substring(start, end + 1));
-        if (decoded is Map<String, dynamic>) return decoded;
-      } catch (_) {}
-    }
-    return {};
   }
 }
