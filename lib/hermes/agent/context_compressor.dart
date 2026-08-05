@@ -47,6 +47,15 @@ class ContextCompressor {
   /// 尾部保留的 token 预算（Hermes tail_token_budget）。
   final int tailTokenBudget;
 
+  /// 尾部保证的 user 消息数（compression.min_tail_user_messages，默认 1）。
+  /// >1 时把尾部扩展到最近 N 条 user 消息，防止大工具输出占满预算时把近期
+  /// 轮次挤进摘要（对齐 upstream 的 N-user-message tail guarantee）。
+  final int minTailUserMessages;
+
+  /// 绝对压缩阈值（token）覆盖。非 null 时取代 contextLength×thresholdPercent
+  /// （对齐 upstream 的 absolute token threshold 配置）。
+  final int? thresholdTokensOverride;
+
   /// 摘要 LLM 调用器：传入中间消息，返回摘要文本。
   final Future<String> Function(List<Map<String, dynamic>> middleMessages)
       summarizer;
@@ -70,14 +79,53 @@ class ContextCompressor {
     this.thresholdPercent = 0.75,
     this.protectFirstN = 3,
     this.tailTokenBudget = 20000,
+    this.minTailUserMessages = 1,
+    this.thresholdTokensOverride,
     required this.summarizer,
   });
 
   /// 压缩阈值（token）。地板：不低于 context 的阈值百分比值。
   int get thresholdTokens {
+    if (thresholdTokensOverride != null) {
+      return thresholdTokensOverride!;
+    }
     final pct = contextLength * thresholdPercent;
     // MINIMUM_CONTEXT_LENGTH 地板（Hermes ~1000 token 小窗口处理）。
     return pct.toInt() < 1000 ? 1000 : pct.toInt();
+  }
+
+  /// 把 cut 前移（tail 只增不缩）到最近 [role] 消息，保证它留在尾部。
+  int _ensureLastInTail(
+    List<Map<String, dynamic>> messages,
+    int cut,
+    int headEnd,
+    String role,
+  ) {
+    for (var i = messages.length - 1; i >= headEnd; i--) {
+      if (messages[i]['role'] == role) {
+        return i < cut ? i : cut;
+      }
+    }
+    return cut;
+  }
+
+  /// 扩展到最近 [n] 条 user 消息（min_tail_user_messages > 1 时）。
+  int _ensureLastNUsersInTail(
+    List<Map<String, dynamic>> messages,
+    int cut,
+    int headEnd,
+    int n,
+  ) {
+    var found = 0;
+    for (var i = messages.length - 1; i >= headEnd; i--) {
+      if (messages[i]['role'] == 'user') {
+        found++;
+        if (found >= n) {
+          return i < cut ? i : cut;
+        }
+      }
+    }
+    return cut;
   }
 
   /// 是否应压缩。
@@ -151,6 +199,23 @@ class ContextCompressor {
     if (working.length - tailStart < 3) {
       tailStart = working.length - 3;
     }
+
+    // 尾部锚点（对齐 upstream）：保证最近 user 消息（活跃任务不被丢进摘要）与
+    // 最近 assistant 消息（可见答复）始终在尾部；min_tail_user_messages > 1 时
+    // 扩展到最近 N 条 user。每个锚点只向前移动 cut（tail 只增不缩），链式单调。
+    var cutIdx = tailStart;
+    cutIdx = _ensureLastInTail(working, cutIdx, headSize, 'user');
+    cutIdx = _ensureLastInTail(working, cutIdx, headSize, 'assistant');
+    if (minTailUserMessages > 1) {
+      cutIdx = _ensureLastNUsersInTail(
+          working, cutIdx, headSize, minTailUserMessages);
+    }
+    // 下限保证前向推进：压缩必须至少吃进一条消息，否则 compress_start >=
+    // compress_end 变成永远重跑的 no-op。
+    if (cutIdx <= headSize) {
+      cutIdx = headSize + 1;
+    }
+    tailStart = cutIdx;
 
     // 3. 中间段（headSize..tailStart）总结。
     final middle = working.sublist(headSize, tailStart);

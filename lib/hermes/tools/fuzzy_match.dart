@@ -54,6 +54,31 @@ String _unicodeNormalize(String text) {
   return text;
 }
 
+/// 请求的编辑是否已存在于文件（对齐 upstream tools/fuzzy_match.py
+/// `is_already_applied`）。生产轨迹显示最常见的 patch 失败是重发一个已落地的
+/// 编辑（old==new，或 old 已消失而 new 原样存在）—— 模型的意图是"让文件包含
+/// 这段文本"，而它已经包含了。调用者用它把这类错误转成显式成功形状的 no-op，
+/// 让模型继续而不是重读重打。
+///
+/// 刻意保守：
+/// - new_string 必须非平凡（strip 后 >= 8 字符）—— 微小目标碰巧匹配不能掩盖
+///   真正的打字错误编辑；
+/// - new_string 必须**精确**出现在 content（不做模糊 —— 近似存在不能证明
+///   编辑已落地）；
+/// - 当 old != new 时，old_string 必须已消失（仍在说明编辑至多半落地）。
+bool isAlreadyApplied(String content, String oldString, String newString) {
+  if (newString.isEmpty || newString.trim().length < 8) {
+    return false;
+  }
+  if (!content.contains(newString)) {
+    return false;
+  }
+  if (oldString == newString) {
+    return true;
+  }
+  return !content.contains(oldString);
+}
+
 /// 查找并替换文本，使用日益模糊的匹配策略链。
 ///
 /// 返回 `(new_content, match_count, strategy_name, error_message)`：

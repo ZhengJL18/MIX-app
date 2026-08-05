@@ -149,7 +149,7 @@ List<String> _extractV4aPaths(String patch) {
 String readFileTool({
   required String path,
   dynamic offset = 1,
-  dynamic limit = 500,
+  dynamic limit = 2000,
 }) {
   try {
     final (offsetN, limitN) = normalizeReadPagination(offset, limit);
@@ -373,8 +373,8 @@ const Map<String, dynamic> readFileSchema = {
       },
       'limit': {
         'type': 'integer',
-        'description': 'Maximum number of lines to read (default: 500, max: 2000)',
-        'default': 500,
+        'description': 'Maximum number of lines to read (default: 2000, max: 2000). Reads are additionally capped at a ~100K-character budget with a next_offset continuation.',
+        'default': 2000,
         'maximum': 2000,
       },
     },
@@ -385,7 +385,7 @@ const Map<String, dynamic> readFileSchema = {
 const Map<String, dynamic> writeFileSchema = {
   'name': 'write_file',
   'description':
-      "Write content to a file, completely replacing existing content. Use this instead of echo/cat heredoc in terminal. Creates parent directories automatically. OVERWRITES the entire file — use 'patch' for targeted edits. Auto-runs syntax checks on .py/.json/.yaml/.toml and other linted languages; only NEW errors introduced by this write are surfaced (pre-existing errors are filtered out).",
+      "Write content to a file, completely replacing existing content. Use this instead of echo/cat heredoc in terminal. Creates parent directories automatically. OVERWRITES the entire file — use 'patch' for targeted edits. Auto-runs syntax checks on .py/.json/.yaml/.toml and other linted languages; only NEW errors introduced by this write are surfaced (pre-existing errors are filtered out). The result's verified:true means the on-disk content hash was confirmed — do NOT re-read the file to check the write landed.",
   'parameters': {
     'type': 'object',
     'properties': {
@@ -522,7 +522,7 @@ FutureOr<dynamic> _handleReadFile(Map<String, dynamic> args, [Map<String, dynami
   return readFileTool(
     path: args['path'] as String? ?? '',
     offset: args['offset'] ?? 1,
-    limit: args['limit'] ?? 500,
+    limit: args['limit'] ?? 2000,
   );
 }
 

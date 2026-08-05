@@ -198,6 +198,9 @@ class ReadResult {
 class WriteResult {
   int bytesWritten;
   bool dirsCreated;
+  // 落盘内容校验：写后读回字节与预期一致为 true；无法校验（读回失败）为
+  // null。不匹配永不落到该字段 —— 它是硬错误（见 writeFile）。
+  bool? verified;
   Map<String, dynamic>? lint;
   // 来自 LSP 层的语义诊断（当适用时）。单独字段（不并入 ``lint``）使模型和
   // 下游解析器把语法错误和语义错误读作独立信号。LSP 禁用、文件不在 git
@@ -209,6 +212,7 @@ class WriteResult {
   WriteResult({
     this.bytesWritten = 0,
     this.dirsCreated = false,
+    this.verified,
     this.lint,
     this.lspDiagnostics,
     this.error,
@@ -222,6 +226,9 @@ class WriteResult {
     }
     if (dirsCreated) {
       result['dirs_created'] = dirsCreated;
+    }
+    if (verified != null) {
+      result['verified'] = verified;
     }
     if (lint != null) {
       result['lint'] = lint;
@@ -249,6 +256,10 @@ class PatchResult {
   Map<String, dynamic>? lint;
   String? lspDiagnostics;
   String? error;
+  // 成功形状的 no-op：请求的编辑已存在于文件，未做任何写入。携带 note 向
+  // 模型解释为何无 diff（对齐 upstream PatchResult.no_change）。
+  bool noChange;
+  String? note;
 
   PatchResult({
     this.success = false,
@@ -259,10 +270,18 @@ class PatchResult {
     this.lint,
     this.lspDiagnostics,
     this.error,
+    this.noChange = false,
+    this.note,
   });
 
   Map<String, dynamic> toDict() {
     final result = <String, dynamic>{'success': success};
+    if (noChange) {
+      result['no_change'] = true;
+    }
+    if (note != null) {
+      result['note'] = note;
+    }
     if (diff.isNotEmpty) {
       result['diff'] = diff;
     }
@@ -518,7 +537,7 @@ final RegExp _searchOutputRe = RegExp(
 /// 跨文件操作后端的抽象接口。
 abstract class FileOperations {
   /// 读文件并支持分页。
-  ReadResult readFile(String path, {int offset = 1, int limit = 500});
+  ReadResult readFile(String path, {int offset = 1, int limit = 2000});
 
   /// 以纯字符串读完整文件内容。
   ///
@@ -638,7 +657,7 @@ const int maxLines = 2000;
 const int maxLineLength = 2000;
 const int maxFileSize = 50 * 1024; // 50KB
 const int defaultReadOffset = 1;
-const int defaultReadLimit = 500;
+const int defaultReadLimit = 2000;
 const int defaultSearchOffset = 0;
 const int defaultSearchLimit = 50;
 
@@ -726,6 +745,64 @@ SearchResult _maybeWarnLineOrientedNewlinePattern(SearchResult result, String pa
       'does not match line breaks. Use context=N to inspect neighboring '
       'lines, or escape as `\\\\n` when searching for a literal backslash+n.';
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Negative-result cache —— 对已知不存在的路径跳过昂贵的 parent-dir 相似文件
+// walk（对齐 upstream file_tools.py not_found 缓存：TTL + 存在性守卫 + 写失效）。
+// ---------------------------------------------------------------------------
+
+final Map<(String, String), ({double at, Object payload})> _notFoundCache = {};
+const double _notFoundTtlSeconds = 60.0;
+const int _notFoundCap = 500;
+
+/// 返回缓存的 not-found 结果（仍新鲜且路径确实不存在时）。
+Object? _checkNotFoundCache(String op, String resolved) {
+  final key = (op, resolved);
+  final entry = _notFoundCache[key];
+  if (entry == null) {
+    return null;
+  }
+  if (DateTime.now().millisecondsSinceEpoch / 1000.0 - entry.at >
+      _notFoundTtlSeconds) {
+    _notFoundCache.remove(key);
+    return null;
+  }
+  // 存在性守卫：路径可能已被外部进程创建（write/patch 显式失效，但不是唯一
+  // 写者）。模型常见模式"先查不存在 → 创建 → 再读"不能被过期 miss 破坏。
+  if (File(resolved).existsSync() || Directory(resolved).existsSync()) {
+    _notFoundCache.remove(key);
+    return null;
+  }
+  return entry.payload;
+}
+
+/// 记录一次 not-found（op 区分 read/search，两者错误形状不同）。
+void _recordNotFound(String op, String resolved, Object payload) {
+  if (_notFoundCache.length >= _notFoundCap) {
+    _notFoundCache.remove(_notFoundCache.keys.first);
+  }
+  _notFoundCache[(op, resolved)] =
+      (at: DateTime.now().millisecondsSinceEpoch / 1000.0, payload: payload);
+}
+
+/// write/patch 创建路径后清除负缓存 —— 后续读/搜必须落盘。
+void _invalidateNotFound(String resolved) {
+  _notFoundCache.remove(('read', resolved));
+  _notFoundCache.remove(('search', resolved));
+}
+
+/// 字节级相等比较（write 落盘校验用）。
+bool _bytesEqual(List<int> a, List<int> b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// 通过 dart:io 直接操作的文件操作实现（对应 ShellFileOperations，传输层替换）。
@@ -924,7 +1001,7 @@ class LocalFileOperations implements FileOperations {
   // =========================================================================
 
   @override
-  ReadResult readFile(String path, {int offset = 1, int limit = 500}) {
+  ReadResult readFile(String path, {int offset = 1, int limit = 2000}) {
     // 展开 ~。
     final absPath = _abs(path);
 
@@ -933,7 +1010,17 @@ class LocalFileOperations implements FileOperations {
     // 检查文件存在并取大小。
     final f = File(absPath);
     if (!f.existsSync()) {
-      return _suggestSimilarFiles(path);
+      // 负缓存：已知不存在的路径直接返回缓存错误，跳过 parent-dir 相似文件 walk
+      // （模型重复重试同一 typo 路径时，每次重试都省一次目录遍历）。
+      final cached = _checkNotFoundCache('read', absPath);
+      if (cached is ReadResult) {
+        return cached;
+      }
+      final suggest = _suggestSimilarFiles(path);
+      if ((suggest.error ?? '').startsWith('File not found:')) {
+        _recordNotFound('read', absPath, suggest);
+      }
+      return suggest;
     }
     int fileSize;
     try {
@@ -1252,12 +1339,35 @@ class LocalFileOperations implements FileOperations {
       bytesWritten = utf8.encode(content).length;
     }
 
+    // Post-write content verification —— 读回对比磁盘字节与预期内容。
+    // 对齐上游 WriteResult.verified：写已落盘且哈希一致才 true，模型看到
+    // verified:true 就不必再读回确认（生产里模型常写后立刻重读确认落盘）。
+    // Dart 原生写盘总能校验；不一致是硬错误（镜像 patchReplace 的验证）。
+    bool? verified;
+    try {
+      final diskBytes = File(absPath).readAsBytesSync();
+      verified = _bytesEqual(diskBytes, utf8.encode(content));
+      if (!verified) {
+        return WriteResult(
+          error: 'Post-write verification failed for $path: on-disk content '
+              'hash differs from the intended write. The write did not '
+              'persist correctly — re-read the file and retry.',
+        );
+      }
+    } catch (_) {
+      verified = null; // 读回失败 → 无法校验，不阻断。
+    }
+
+    // 写成功 → 该路径不再是"不存在"，清除负缓存。
+    _invalidateNotFound(absPath);
+
     // Post-write lint with delta refinement。
     final lintResult = _checkLintDelta(absPath, preContent: preContent, postContent: content);
 
     return WriteResult(
       bytesWritten: bytesWritten,
       dirsCreated: dirsCreated,
+      verified: verified,
       lint: lintResult.toDict(),
     );
   }
@@ -1297,6 +1407,17 @@ class LocalFileOperations implements FileOperations {
     );
 
     if (error != null || matchCount == 0) {
+      // 已应用检测：最常见的 patch 失败是重发一个已落地的编辑。转成显式成功
+      // 形状的 no-op，让模型继续而非重读重打（对齐 upstream）。
+      if (isAlreadyApplied(content, oldString, newString)) {
+        return PatchResult(
+          success: true,
+          noChange: true,
+          note: 'File already contains the target text — the edit appears to '
+              'be already applied to $path. No write performed; do not re-send '
+              'this patch.',
+        );
+      }
       var errMsg = error ?? 'Could not find match for old_string in $path';
       // Python 包 try/except: pass —— hint 计算失败不顶掉主错误。
       try {
@@ -1496,13 +1617,118 @@ class LocalFileOperations implements FileOperations {
 
     // 验证路径存在。
     if (!Directory(absPath).existsSync() && !File(absPath).existsSync()) {
-      return SearchResult(error: 'Path not found: $path', totalCount: 0);
+      // 负缓存：已知不存在的搜索根直接返回缓存错误（跳过重复 shell/目录遍历）。
+      final cached = _checkNotFoundCache('search', absPath);
+      if (cached is SearchResult) {
+        return cached;
+      }
+      // 多路径恢复：模型常把 "dir1 dir2 dir3"（或逗号分隔列表）一次塞进 path。
+      // 拆开搜索所有存在的路径并合并结果，报告被跳过的部分。
+      final multi = _tryMultiPathSearch(
+        pattern,
+        path,
+        target,
+        fileGlob,
+        limitN,
+        offsetN,
+        outputMode,
+        context,
+      );
+      if (multi != null) {
+        return multi;
+      }
+      final notFound =
+          SearchResult(error: 'Path not found: $path', totalCount: 0);
+      _recordNotFound('search', absPath, notFound);
+      return notFound;
     }
 
     if (target == 'files') {
       return _searchFiles(pattern, absPath, limitN, offsetN);
     }
     return _searchContent(pattern, absPath, fileGlob, limitN, offsetN, outputMode, context);
+  }
+
+  /// 多路径恢复：把 not-found 的 ``path`` 拆成多个候选（空格/逗号分隔）。
+  ///
+  /// 生产轨迹显示模型把 "dir1 dir2 dir3" 或逗号分隔列表整体塞进 path。当
+  /// 至少给出两个候选且至少一个存在时，搜索每个存在的路径并合并结果，note
+  /// 报告跳过的部分。返回 null 表示这不像是多路径字符串（对齐 upstream
+  /// ``_try_multi_path_search``）。
+  SearchResult? _tryMultiPathSearch(
+    String pattern,
+    String path,
+    String target,
+    String? fileGlob,
+    int limit,
+    int offset,
+    String outputMode,
+    int context,
+  ) {
+    final parts = path
+        .split(RegExp(r'[,\s]+'))
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
+    if (parts.length < 2) {
+      return null;
+    }
+    final existing = <String>[];
+    final missing = <String>[];
+    for (final part in parts) {
+      final expanded = _abs(part);
+      // 沙盒边界：未授全盘访问时，超范围的部分按缺失处理（不越界搜索）。
+      if (!allowExternalAccess) {
+        final baseCwd = cwd;
+        final absCwd = baseCwd == null
+            ? Directory.current.path
+            : (p.isAbsolute(baseCwd)
+                ? p.normalize(baseCwd)
+                : p.normalize(p.join(Directory.current.path, baseCwd)));
+        if (expanded != absCwd && !p.isWithin(absCwd, expanded)) {
+          missing.add(part);
+          continue;
+        }
+      }
+      if (Directory(expanded).existsSync() || File(expanded).existsSync()) {
+        existing.add(expanded);
+      } else {
+        missing.add(part);
+      }
+    }
+    if (existing.isEmpty) {
+      return null;
+    }
+
+    final merged = SearchResult(
+      matches: <SearchMatch>[],
+      files: <String>[],
+      counts: <String, int>{},
+    );
+    for (final p in existing) {
+      final sub = target == 'files'
+          ? _searchFiles(pattern, p, limit, offset)
+          : _searchContent(pattern, p, fileGlob, limit, offset, outputMode, context);
+      if (sub.error != null) {
+        continue;
+      }
+      merged.matches.addAll(sub.matches);
+      merged.files.addAll(sub.files);
+      merged.counts.addAll(sub.counts);
+      merged.totalCount += sub.totalCount;
+      merged.truncated = merged.truncated || sub.truncated;
+    }
+    merged.matches = merged.matches.take(limit).toList();
+    merged.files = merged.files.take(limit).toList();
+    var note = 'path contained ${parts.length} entries; searched '
+        '${existing.length} that exist';
+    if (missing.isNotEmpty) {
+      note += '; skipped missing: ${missing.take(3).join(', ')}';
+      if (missing.length > 3) {
+        note += ' (+${missing.length - 3} more)';
+      }
+    }
+    merged.warning = note;
+    return merged;
   }
 
   SearchResult _searchFiles(String pattern, String path, int limit, int offset) {
@@ -1538,11 +1764,13 @@ class LocalFileOperations implements FileOperations {
     int limit,
     int offset,
     String outputMode,
-    int context,
-  ) {
+    int context, {
+    bool probeMode = false,
+    bool caseSensitive = true,
+  }) {
     RegExp re;
     try {
-      re = RegExp(pattern);
+      re = RegExp(pattern, caseSensitive: caseSensitive);
     } catch (e) {
       return SearchResult(error: 'Search failed: invalid regex $e', totalCount: 0);
     }
@@ -1644,7 +1872,62 @@ class LocalFileOperations implements FileOperations {
       totalCount: total,
       truncated: total > offset + limit || truncated,
     );
+    // 零命中探测：0 匹配的结果对模型没有可抓的抓手，是死轮。廉价探测近邻
+    // （大小写错误、正则元字符需转义）并附 warning（对齐 upstream
+    // ``_zero_match_probe``）。probeMode 防止探测自身再触发探测。
+    if (!probeMode && total == 0 && outputMode == 'content') {
+      final hint = _zeroMatchProbe(pattern, path, fileGlob);
+      if (hint != null) {
+        result.warning =
+            result.warning == null ? hint : '${result.warning} $hint';
+      }
+    }
     return _maybeWarnLineOrientedNewlinePattern(result, pattern);
+  }
+
+  /// 零命中内容搜索的近邻探测。返回提示或 null。
+  ///
+  /// 上游 13.9% 的 content 搜索零命中且不给模型任何可转向信息。跑至多两次
+  /// 廉价 count-only 扫描：大小写不敏感探测 + （正则含元字符时）字面量探测。
+  /// hidden/gitignored 探测跳过 —— Dart 原生搜索不排除点目录（无 gitignore），
+  /// 隐藏文件本就被覆盖。
+  String? _zeroMatchProbe(String pattern, String path, String? fileGlob) {
+    // 1. 大小写不敏感探测。
+    final ci = _searchContent(
+      pattern,
+      path,
+      fileGlob,
+      50,
+      0,
+      'count',
+      0,
+      probeMode: true,
+      caseSensitive: false,
+    );
+    if (ci.totalCount > 0) {
+      return '0 exact matches, but ${ci.totalCount} case-insensitive '
+          "match(es) in ${ci.counts.length} file(s) — the pattern's casing "
+          'may be wrong.';
+    }
+    // 2. 正则元字符 → 字面量探测。
+    if (RegExp(r'[.\[\](){}?*+^$\\|]').hasMatch(pattern)) {
+      final fixed = _searchContent(
+        RegExp.escape(pattern),
+        path,
+        fileGlob,
+        50,
+        0,
+        'count',
+        0,
+        probeMode: true,
+      );
+      if (fixed.totalCount > 0) {
+        return '0 regex matches, but ${fixed.totalCount} literal match(es) — '
+            'the pattern contains regex metacharacters that likely need '
+            'escaping (or pass a simpler substring).';
+      }
+    }
+    return null;
   }
 
   /// 递归收集要搜索的文件（尊重 fileGlob 通配）。

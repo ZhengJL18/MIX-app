@@ -142,14 +142,14 @@ Future<void> initConfig() async {
 
 /// 常用模型预设（按 vendor）。
 const Map<String, List<String>> vendorModels = {
-  'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
+  'deepseek': ['deepseek-v4-flash', 'deepseek-v4-flash-0731', 'deepseek-chat', 'deepseek-reasoner'],
   'alibaba': ['qwen-plus', 'qwen-max', 'qwen-turbo'],
   'openai': ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
   'kimi-for-coding': ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
   'zai': ['glm-4-plus', 'glm-4-flash'],
-  'google': ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+  'google': ['gemini-3.6-flash', 'gemini-3.1-pro', 'gemini-2.0-flash', 'gemini-1.5-pro'],
   'openrouter': ['openrouter/auto'],
-  'anthropic': ['claude-sonnet-4-6', 'claude-opus-4-5'],
+  'anthropic': ['claude-sonnet-4-6', 'claude-opus-5', 'claude-opus-4-5'],
 };
 
 /// vendor 显示名（配置页下拉用）。
