@@ -313,7 +313,8 @@ class _FullPageState extends State<_FullPage> {
     if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
   }
 
-  /// 猫咪贴图固定比例（原图 100×158，这里缩到 56×88），保持原貌不拉伸。
+  /// 猫咪贴图显示尺寸。原图 100×158，这里缩到 56×88（用户嫌 100 太大）。
+  /// BoxFit.contain 保留原始宽高比，不拉伸，透明区域自然透出。
   static const double _thumbW = 56;
   static const double _thumbH = 88;
 
@@ -397,22 +398,18 @@ class _FullPageState extends State<_FullPage> {
                       child: Stack(
                         children: [
                           // thumb（猫咪贴图）
-                          // PNG 自带 alpha：透明区域透出背景，猫咪实心保持清晰。
-                          // 不用 Opacity 整体半透明（那会把猫咪也弄灰）。
-                          // 拖动时轻微放大作为反馈。
+                          // 透明 PNG 的正确渲染：BoxFit.contain 保留原始宽高比，
+                          // 不拉伸。透明区域由 PNG alpha 自然透出下层背景。
+                          // 不用 Opacity（会把猫咪也弄灰）不用 fill（会拉伸 alpha）。
                           Positioned(
                             top: thumbTop,
                             right: 0,
-                            child: AnimatedScale(
-                              scale: _dragging ? 1.15 : 1.0,
-                              duration: const Duration(milliseconds: 120),
-                              child: SizedBox(
-                                width: _thumbW,
-                                height: _thumbH,
-                                child: Image.asset(
-                                  'assets/scrollbar/cat_thumb.png',
-                                  fit: BoxFit.fill,
-                                ),
+                            child: SizedBox(
+                              width: _thumbW,
+                              height: _thumbH,
+                              child: Image.asset(
+                                'assets/scrollbar/cat_thumb.png',
+                                fit: BoxFit.contain,
                               ),
                             ),
                           ),
