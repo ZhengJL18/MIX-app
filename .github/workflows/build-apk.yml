@@ -12,6 +12,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 发 GitHub Release 需要 contents: write（仓库默认 token 是 read-only）
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
