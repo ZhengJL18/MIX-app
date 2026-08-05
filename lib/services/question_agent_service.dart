@@ -41,6 +41,17 @@ class QuestionAgentService {
   /// kpId → 正在生成中的 Future（避免重复触发）。
   final Map<int, Future<void>> _inFlight = {};
 
+  /// B: 近期出过题的 kpId 序列（新→旧），planner 据此避免连续选同一 kp。
+  final List<int> _recentKpIds = [];
+  static const int _recentKpMax = 6;
+
+  /// 出题成功 → 记录该 kp 到近期序列（B 层轮换）。
+  void _rememberKp(int kpId) {
+    _recentKpIds.remove(kpId);
+    _recentKpIds.insert(0, kpId);
+    if (_recentKpIds.length > _recentKpMax) _recentKpIds.removeLast();
+  }
+
   /// 取下一题：预生成池有货直接取；没有则跑完整 planner→generator 出题。
   Future<int> nextQuestionId(int userId, {void Function(String)? onStream}) async {
     final settings = await AiSettings.load();
@@ -90,11 +101,24 @@ class QuestionAgentService {
     }
     final statusBlock = statuses.join('\n');
 
+    // B: 近期已出题的 kp（避免连续刷同一知识点）
+    final recentKpNames = <String>[];
+    for (final kpId in _recentKpIds) {
+      final n = await _kpRepo.getKpName(kpId);
+      if (n != null && n.isNotEmpty) recentKpNames.add(n);
+    }
+    final recentKpBlock = recentKpNames.isEmpty
+        ? '（暂无）'
+        : recentKpNames.join('、');
+
     final prompt = '''
 你是学习规划代理。根据以下各科目的知识点级状态，决定学生当前最该练哪个科目、哪个知识点。
 
 【各科目知识点状态】
 $statusBlock
+
+【近期刚出过题的知识点】（请避免连续选到它们）
+$recentKpBlock
 
 要求：输出 JSON（不要任何其他文字），格式：
 {"subject_id": <科目id>, "kp_id": <知识点id>, "reason": "<一句话理由>"}
@@ -103,6 +127,7 @@ $statusBlock
 1. 优先选"未练"的知识点（学生还没碰过的新知识点）。
 2. 其次选近期做错的（练习中"对M错K"里 K>0 的）。
 3. 不要选已经全对很多题的知识点（太简单）。
+4. 尽量避免与【近期刚出过题的知识点】重复 —— 换科目/换知识点练。
 ''';
 
     final planner = JailerAgent(
@@ -143,13 +168,15 @@ $statusBlock
     return (subjectId, kpId);
   }
 
-  /// 兜底：按科目顺序找第一个"未练的真知识点"。
+  /// 兜底：按科目顺序找第一个"未练的真知识点"；全练过则避开近期 kp。
   Future<(int, int)> _fallbackKp(int userId) async {
     final subjects = await _subjectRepo.getAllSubjects();
+    final db = await DatabaseHelper.instance.database;
+
+    // 第一优先：未练的真知识点（天然轮换）
     for (final subj in subjects) {
       final sId = subj['id'] as int;
       final kps = await _kpRepo.getKpsBySubject(sId);
-      final db = await DatabaseHelper.instance.database;
       for (final kp in kps) {
         final name = kp['name'] as String? ?? '';
         if (name == '还没开始' || name == '已经学完') continue;
@@ -163,19 +190,77 @@ $statusBlock
         if (cnt == 0) return (sId, kid); // 第一个未练的真知识点
       }
     }
-    // 全练过了 → 退回第一科目第一真知识点
-    final first = subjects.first;
-    final fsId = first['id'] as int;
-    final kps = await _kpRepo.getKpsBySubject(fsId);
-    final real = kps.firstWhere(
-      (k) => k['name'] != '还没开始' && k['name'] != '已经学完',
-      orElse: () => kps.first,
-    );
-    return (fsId, real['id'] as int);
+
+    // 全练过了 → 收集所有真知识点，避开近期已出题的，选没被近期宠幸的
+    final candidates = <(int, int, String)>[]; // (subjectId, kpId, name)
+    for (final subj in subjects) {
+      final sId = subj['id'] as int;
+      final kps = await _kpRepo.getKpsBySubject(sId);
+      for (final kp in kps) {
+        final name = kp['name'] as String? ?? '';
+        if (name == '还没开始' || name == '已经学完') continue;
+        candidates.add((sId, kp['id'] as int, name));
+      }
+    }
+    if (candidates.isEmpty) throw StateError('没有可用知识点');
+    // 优先选不在近期序列里的
+    for (final c in candidates) {
+      if (!_recentKpIds.contains(c.$2)) return (c.$1, c.$2);
+    }
+    // 全在近期里 → 取最近最少出的那个
+    final first = candidates.first;
+    return (first.$1, first.$2);
   }
 
-  /// 子代理：读该科画像全文 + 近20题，出一题（Markdown）。
+  /// 子代理：读该科画像全文 + 近况 + 该知识点实时统计，出一题（Markdown）。
+  ///
+  /// 防重复（三层，成本可控）：
+  /// - A: prompt 注入该知识点最近 [antiRepeatHistory] 题摘要，命令不重复
+  /// - C: 生成后脚本 Jaccard 判重，重复则重生成（最多 1 次，校验零 token）
   Future<int> _generateAndStore(
+    int userId,
+    int subjectId,
+    int kpId,
+    AiSettings settings,
+  ) async {
+    // 生成（最多 2 次：首生成 + 判重后的 1 次重生成）
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final parsed = await _generateOnce(userId, subjectId, kpId, settings);
+      if (parsed == null) break; // 生成失败，用已抛的错
+
+      // C: 脚本判重 —— 只对重复的题花重生成的钱，校验本身免费
+      final isDup = await _isDuplicate(kpId, parsed.content);
+      if (!isDup) {
+        var options = parsed.options;
+        var correctAnswer = parsed.correctAnswer;
+        if (options.isEmpty) {
+          correctAnswer = parsed.correctAnswer.isNotEmpty
+              ? parsed.correctAnswer
+              : parsed.content.trim();
+          options = [correctAnswer, '以上都不是', '无法确定', '选项 D'];
+        }
+        final qid = await _questionRepo.insertQuestion(
+          kpId: kpId,
+          content: parsed.content,
+          answer: correctAnswer,
+          options: options,
+          explanation: parsed.explanation,
+          cplxCoef: parsed.cplxCoef,
+          undCoef: parsed.undCoef,
+          redCoef: parsed.redCoef,
+          covCoef: parsed.covCoef,
+          isSeed: false,
+        );
+        _rememberKp(kpId);
+        return qid;
+      }
+      // 重复 → 下一轮重生成（generator prompt 会注入更多历史，避开已出现的）
+    }
+    throw Exception('出题代理连续生成重复题目');
+  }
+
+  /// 单次生成一道题并解析。返回 null 表示失败（错误已抛）。
+  Future<GeneratedQuestion?> _generateOnce(
     int userId,
     int subjectId,
     int kpId,
@@ -189,11 +274,21 @@ $statusBlock
     final recent = await _portrait.recentLog(userId: userId, subjectId: subjectId);
     // 该知识点的实时做题统计 —— 校准难度的权威依据（画像可能过时）
     final kpStats = await _portrait.kpPracticeStats(userId, kpId);
+    // A: 该知识点最近已出过的题（防重复，注入摘要）
+    final recentQ = await _questionRepo.recentQuestionContents(kpId, limit: 8);
+    final recentQBlock = recentQ.isEmpty
+        ? '（暂无）'
+        : recentQ
+            .map((c) => '- ${_summaryOf(c, 40)}')
+            .join('\n');
 
     final prompt = '''
 你是「${subject['name']}」老师，为学生出一道单选题。
 
 本次考察知识点：$kpName
+
+【该知识点最近已出过的题】（禁止重复以下任何一题的题干或考点）
+$recentQBlock
 
 【该知识点实时做题情况】（难度校准的首要依据）
 $kpStats
@@ -210,7 +305,8 @@ $recent
    - 若已练且做错 → 针对错的点出同类题巩固。
    - 若尚未练习 → 出该知识点的基础概念题，先建立掌握。
 2. 针对画像中的薄弱点与易错模式出题。
-3. 不要重复近况中已出现过的题型/考点。
+3. 【硬性】题干与【最近已出过的题】任何一题都不得重复或高度相似，
+   换数字/换字母不算新题，必须换考点或换题型。
 4. 必须包含 4 个选项（A/B/C/D），且只有一个正确选项，干扰项合理。
 
 请严格按以下 Markdown 格式返回：
@@ -260,27 +356,52 @@ D. [选项D]
 
     // 用现有解析器把 Markdown 解析成 GeneratedQuestion
     final parsed = AnthropicAiService.parseMarkdownResponse(text);
-    var options = parsed.options;
-    var correctAnswer = parsed.correctAnswer;
-    if (options.isEmpty) {
-      correctAnswer = parsed.correctAnswer.isNotEmpty
-          ? parsed.correctAnswer
-          : parsed.content.trim();
-      options = [correctAnswer, '以上都不是', '无法确定', '选项 D'];
+    if (parsed.content.trim().isEmpty) {
+      throw Exception('出题代理返回无题干');
     }
+    return parsed;
+  }
 
-    return _questionRepo.insertQuestion(
-      kpId: kpId,
-      content: parsed.content,
-      answer: correctAnswer,
-      options: options,
-      explanation: parsed.explanation,
-      cplxCoef: parsed.cplxCoef,
-      undCoef: parsed.undCoef,
-      redCoef: parsed.redCoef,
-      covCoef: parsed.covCoef,
-      isSeed: false,
-    );
+  /// C: Jaccard 相似度判重。纯脚本，零 token。
+  /// 用题干字符二元组集合算交集/并集，超阈值判重复。
+  /// 对比的是该知识点全部历史题干（不只近 8 题，校验不用省 token）。
+  Future<bool> _isDuplicate(int kpId, String content) async {
+    final all = await _questionRepo.recentQuestionContents(kpId, limit: 100);
+    if (all.isEmpty) return false;
+    final target = _charset(content);
+    if (target.isEmpty) return false;
+    for (final c in all) {
+      final set = _charset(c);
+      if (set.isEmpty) continue;
+      final inter = target.intersection(set).length;
+      final union = target.union(set).length;
+      if (union > 0 && inter / union > 0.6) return true;
+    }
+    return false;
+  }
+
+  /// 题干 → 去空白字符的二元组集合（Jaccard 用）。
+  Set<String> _charset(String s) {
+    final cleaned = s
+        .replaceAll(RegExp(r'[{}\\\\]'), '')
+        .replaceAll(RegExp(r'\s+'), '');
+    if (cleaned.length < 2) return {};
+    final set = <String>{};
+    for (var i = 0; i < cleaned.length - 1; i++) {
+      set.add(cleaned.substring(i, i + 2));
+    }
+    return set;
+  }
+
+  /// 题干压缩成一句话摘要（防重复清单注入用，控制 token）。
+  String _summaryOf(String content, int maxLen) {
+    // 去掉 LaTeX 标记/空白，取前 maxLen 字符
+    final cleaned = content
+        .replaceAll(RegExp(r'\\[a-zA-Z]+'), '')
+        .replaceAll(RegExp(r'[{}\\\\]'), '')
+        .replaceAll(RegExp(r'\s+'), '')
+        .trim();
+    return cleaned.length <= maxLen ? cleaned : '${cleaned.substring(0, maxLen)}…';
   }
 
   /// 从 agent 输出里提取 JSON（容忍 ```json 包裹 / 前后杂文字）。

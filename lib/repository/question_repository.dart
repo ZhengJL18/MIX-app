@@ -50,6 +50,24 @@ class QuestionRepository {
     return rows.isEmpty ? null : (rows.first['subject_id'] as num).toInt();
   }
 
+  /// 某知识点最近 [limit] 道题的题干（用于防重复）。
+  /// 做过的题 + 预生成的题都在 questions 表，一并排除重复。
+  Future<List<String>> recentQuestionContents(int kpId, {int limit = 8}) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'questions',
+      columns: ['content'],
+      where: 'kp_id = ?',
+      whereArgs: [kpId],
+      orderBy: 'id DESC',
+      limit: limit,
+    );
+    return rows
+        .map((r) => (r['content'] as String? ?? '').trim())
+        .where((c) => c.isNotEmpty)
+        .toList();
+  }
+
   /// 该知识点历史错因分布，喂给 AI 出题提示词（3.4 build_prompt 用）。
   Future<Map<String, int>> getErrorDistribution(int kpId) async {
     final db = await DatabaseHelper.instance.database;
