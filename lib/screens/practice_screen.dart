@@ -313,9 +313,9 @@ class _FullPageState extends State<_FullPage> {
     if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
   }
 
-  /// 猫咪贴图固定比例（原图 726×1150），保持原貌不拉伸。
-  static const double _thumbW = 52;
-  static const double _thumbH = 52 * 1150 / 726; // ≈82
+  /// 猫咪贴图固定比例（预处理后 100×158），保持原貌不拉伸。
+  static const double _thumbW = 100;
+  static const double _thumbH = 158;
 
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
@@ -393,15 +393,16 @@ class _FullPageState extends State<_FullPage> {
                     onVerticalDragEnd: _onDragEnd,
                     onVerticalDragCancel: _onDragCancel,
                     child: SizedBox(
-                      width: 56,
+                      width: _thumbW + 8,
                       child: Stack(
                         children: [
                           // thumb（猫咪贴图，固定等比，PNG 自带透明）
                           Positioned(
                             top: thumbTop,
-                            right: 2,
+                            right: 0,
                             child: AnimatedOpacity(
-                              opacity: _dragging ? 1 : 0.9,
+                              // 基础半透明保证透出感，拖动时清晰些
+                              opacity: _dragging ? 0.85 : 0.55,
                               duration: const Duration(milliseconds: 120),
                               child: SizedBox(
                                 width: _thumbW,
@@ -409,7 +410,6 @@ class _FullPageState extends State<_FullPage> {
                                 child: Image.asset(
                                   'assets/scrollbar/cat_thumb.png',
                                   fit: BoxFit.fill,
-                                  alignment: Alignment.topCenter,
                                 ),
                               ),
                             ),
