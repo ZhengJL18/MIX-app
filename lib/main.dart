@@ -166,6 +166,7 @@ class _AppEntryState extends State<AppEntry> {
     }
   }
 
+
   Future<void> _checkOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     final complete = prefs.getBool('onboarding_complete') ?? false;
@@ -342,6 +343,75 @@ class _MainShellState extends State<_MainShell> {
   }
 
   /// 二级菜单：点左上角 Logo 弹出
+  /// 手动检查更新（二级菜单入口）。有新版弹窗，无新版提示已是最新。
+  Future<void> _checkUpdateManually() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('正在检查更新...')),
+    );
+    final info = await UpdateService.checkForUpdate();
+    if (!mounted) return;
+    if (info != null) {
+      _showUpdateDialog(info);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已是最新版本')),
+      );
+    }
+  }
+
+  void _showUpdateDialog(UpdateInfo info) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text('发现新版本 v${info.version}'),
+        content: SingleChildScrollView(
+          child: Text(info.notes?.trim().isNotEmpty == true
+              ? info.notes!
+              : '有新版本可用，点击更新。'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('稍后'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _downloadAndInstall(info);
+            },
+            child: const Text('立即更新'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadAndInstall(UpdateInfo info) async {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('正在下载更新...'),
+          ],
+        ),
+      ),
+    );
+    final ok = await UpdateService.downloadAndInstall(info.downloadUrl);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('下载失败，请稍后重试')),
+      );
+    }
+  }
+
   void _openMenu() {
     showModalBottomSheet(
       context: context,
@@ -388,6 +458,10 @@ class _MainShellState extends State<_MainShell> {
             _menuItem(ctx, Icons.palette_outlined, '主题', () {
               Navigator.of(ctx).pop();
               _openThemePicker(context);
+            }),
+            _menuItem(ctx, Icons.system_update_alt, '检查更新', () {
+              Navigator.of(ctx).pop();
+              _checkUpdateManually();
             }),
             SizedBox(height: 24),
           ],
