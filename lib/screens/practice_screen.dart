@@ -175,9 +175,10 @@ class _PracticeScreenState extends State<PracticeScreen> {
                     final state = _state(qIdx);
                     final answered = state != _AnswerState.unanswered;
 
+                    final Widget content;
                     switch (phase) {
                       case 0: // 题目页
-                        return _FullPage(
+                        content = _FullPage(
                           child: QuestionCard(
                             question: q,
                             selectedOption: _selectedOptions[qIdx],
@@ -186,7 +187,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                           ),
                         );
                       case 1: // 趣味评价页
-                        return _FullPage(
+                        content = _FullPage(
                           child: FunResultCard(
                             type: state == _AnswerState.correct
                                 ? FunResultType.correct
@@ -199,7 +200,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       default:
                         if (!answered) {
                           // 未作答：滑过趣味页直接到下一题题目（不展示答案）
-                          return _FullPage(
+                          content = _FullPage(
                             child: Center(
                               child: Text(
                                 '还没做题呢，下滑跳过本题 ➡',
@@ -207,29 +208,38 @@ class _PracticeScreenState extends State<PracticeScreen> {
                               ),
                             ),
                           );
-                        }
-                        return _FullPage(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              AnswerCard(
-                                question: q,
-                                selectedOption: _selectedOptions[qIdx],
-                                isCorrect: state == _AnswerState.correct,
-                              ),
-                              if (state == _AnswerState.wrong && _hasOptions(q['options'])) ...[
-                                const SizedBox(height: 8),
-                                FeedbackCard(
-                                  mainCause: _mainCauses[qIdx],
-                                  minorCause: _minorCauses[qIdx],
-                                  onMainCauseChanged: (c) => setState(() => _mainCauses[qIdx] = c),
-                                  onMinorCauseChanged: (c) => setState(() => _minorCauses[qIdx] = c),
+                        } else {
+                          content = _FullPage(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AnswerCard(
+                                  question: q,
+                                  selectedOption: _selectedOptions[qIdx],
+                                  isCorrect: state == _AnswerState.correct,
                                 ),
+                                if (state == _AnswerState.wrong && _hasOptions(q['options'])) ...[
+                                  const SizedBox(height: 8),
+                                  FeedbackCard(
+                                    mainCause: _mainCauses[qIdx],
+                                    minorCause: _minorCauses[qIdx],
+                                    onMainCauseChanged: (c) => setState(() => _mainCauses[qIdx] = c),
+                                    onMinorCauseChanged: (c) => setState(() => _minorCauses[qIdx] = c),
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
-                        );
+                            ),
+                          );
+                        }
                     }
+
+                    // 作答状态/选中选项变化 → key 变 → 强制重建该页。
+                    // 否则 allowImplicitScrolling 预渲染的页面保持"未作答"旧版本，
+                    // 滑到时显示的趣味评价/答案与当前作答不符。
+                    return KeyedSubtree(
+                      key: ValueKey('p$page-$state-${_selectedOptions[qIdx]}'),
+                      child: content,
+                    );
                   },
                   onPageChanged: (page) {
                     final qIdx = page ~/ 3;
