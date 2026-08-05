@@ -266,7 +266,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
 /// 一页容器 — 内容可溢出，但页内手势滚动禁用（避免跟 PageView 翻页抢手势）。
 ///
 /// 手指滑动统一交给外层垂直 PageView 翻页（默认行为）；
-/// 内容超出屏幕时右侧出现滚动条，长内容只能拖动滚动条查看。
+/// 内容超出屏幕时右侧出现可拖动滚动条，长内容只能拖动滚动条查看。
+///
+/// 滚动条交互参考桌面/iOS 先进设计：
+/// - 整条轨道（22px 宽）都是命中区，不只 thumb，手指好命中
+/// - thumb 有最小长度（40px），内容再多也够握
+/// - 拖动时 thumb 加宽 + 高亮 + 轨道底色淡入，松手恢复半透明
 class _FullPage extends StatefulWidget {
   final Widget child;
   const _FullPage({required this.child});
@@ -279,21 +284,74 @@ class _FullPageState extends State<_FullPage> {
   final ScrollController _ctrl = ScrollController();
   bool _scrollable = false;
 
+  // 滚动条状态（比例 0~1）
+  double _thumbExtent = 0; // thumb 高度占比
+  double _thumbOffset = 0; // thumb 顶部偏移占比（相对可滚动距离）
+  bool _dragging = false;
+  double _trackHeight = 0;
+
+  // 拖动基准
+  double _dragStartScroll = 0;
+  double _dragStartY = 0;
+
   @override
   void initState() {
     super.initState();
-    _ctrl.addListener(_checkScrollable);
+    _ctrl.addListener(_sync);
   }
 
-  void _checkScrollable() {
-    if (!_ctrl.hasClients) return;
-    final canScroll = _ctrl.position.maxScrollExtent > 0;
+  /// 滚动 → 更新 thumb 位置（拖动中跳过，避免循环）。
+  void _sync() {
+    if (!_ctrl.hasClients || _dragging) return;
+    setState(() {
+      final pos = _ctrl.position;
+      final range = pos.maxScrollExtent;
+      _thumbExtent = pos.viewportDimension / (range + pos.viewportDimension);
+      _thumbOffset = range > 0 ? pos.pixels / range : 0;
+    });
+  }
+
+  void _updateScrollable(bool canScroll) {
     if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
+  }
+
+  /// thumb 实际高度：按内容占比 + 最小 40px 保证可握。
+  double get _thumbHeight {
+    final h = 12 + _trackHeight * _thumbExtent;
+    return h.clamp(40.0, _trackHeight).toDouble();
+  }
+
+  void _onDragStart(DragStartDetails d) {
+    _dragging = true;
+    _dragStartScroll = _ctrl.position.pixels;
+    _dragStartY = d.globalPosition.dy;
+    setState(() {});
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    final pos = _ctrl.position;
+    final range = pos.maxScrollExtent;
+    if (range <= 0) return;
+    final deltaY = d.globalPosition.dy - _dragStartY;
+    final target = _dragStartScroll + deltaY / _trackHeight * range;
+    _ctrl.jumpTo(target.clamp(0.0, range).toDouble());
+    // 拖动时 thumb 跟手：直接从当前 offset 反推位置
+    setState(() => _thumbOffset = (_ctrl.position.pixels / range).clamp(0.0, 1.0));
+  }
+
+  void _onDragEnd(DragEndDetails d) => _endDrag();
+
+  void _onDragCancel() => _endDrag();
+
+  void _endDrag() {
+    _dragging = false;
+    setState(() {});
+    _sync();
   }
 
   @override
   void dispose() {
-    _ctrl.removeListener(_checkScrollable);
+    _ctrl.removeListener(_sync);
     _ctrl.dispose();
     super.dispose();
   }
@@ -302,24 +360,78 @@ class _FullPageState extends State<_FullPage> {
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.lightBg,
-      child: NotificationListener<ScrollMetricsNotification>(
-        onNotification: (n) {
-          final canScroll = n.metrics.maxScrollExtent > 0;
-          if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
-          return false;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _trackHeight = constraints.maxHeight;
+          final thumbHeight = _thumbHeight;
+          final thumbTop =
+              _thumbOffset.clamp(0.0, 1.0) * (_trackHeight - thumbHeight);
+
+          return Stack(
+            children: [
+              // 内容（禁手势，只读滚动条）
+              Positioned.fill(
+                child: NotificationListener<ScrollMetricsNotification>(
+                  onNotification: (n) {
+                    _updateScrollable(n.metrics.maxScrollExtent > 0);
+                    return false;
+                  },
+                  child: SingleChildScrollView(
+                    controller: _ctrl,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    child: widget.child,
+                  ),
+                ),
+              ),
+              // 可拖动滚动条（整条轨道是命中区）
+              if (_scrollable)
+                Positioned(
+                  top: 0,
+                  bottom: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onVerticalDragStart: _onDragStart,
+                    onVerticalDragUpdate: _onDragUpdate,
+                    onVerticalDragEnd: _onDragEnd,
+                    onVerticalDragCancel: _onDragCancel,
+                    child: SizedBox(
+                      width: 22,
+                      child: Stack(
+                        children: [
+                          // 轨道底色（拖动时淡入）
+                          AnimatedOpacity(
+                            opacity: _dragging ? 1 : 0,
+                            duration: const Duration(milliseconds: 120),
+                            child: Container(
+                              width: 22,
+                              color: Colors.black.withValues(alpha: 0.04),
+                            ),
+                          ),
+                          // thumb
+                          Positioned(
+                            top: thumbTop,
+                            left: 8,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 120),
+                              width: _dragging ? 10 : 6,
+                              height: thumbHeight,
+                              decoration: BoxDecoration(
+                                color: Colors.black
+                                    .withValues(alpha: _dragging ? 0.55 : 0.3),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
         },
-        child: RawScrollbar(
-          controller: _ctrl,
-          // 内容超高才显示滚动条；拖动滚动条是页内唯一滚动方式
-          thumbVisibility: _scrollable,
-          interactive: true,
-          child: SingleChildScrollView(
-            controller: _ctrl,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(24),
-            child: widget.child,
-          ),
-        ),
       ),
     );
   }
