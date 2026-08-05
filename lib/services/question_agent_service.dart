@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../db/database_helper.dart';
 import '../hermes/agent/agent.dart';
 import '../hermes/llm/openai_llm.dart';
@@ -79,8 +81,12 @@ class QuestionAgentService {
     if (_nextPool.containsKey(kpId)) return;
     if (_inFlight.containsKey(kpId)) return;
     final future = _generateAndStore(userId, subjectId, kpId, settings)
-        .then((id) => _nextPool[kpId] = id)
-        .whenComplete(() => _inFlight.remove(kpId));
+        .then((id) {
+      _nextPool[kpId] = id;
+    }, onError: (e) {
+      // 预生成失败静默记录，不反复触发（避免无限重试烧钱/卡死）
+      debugPrint('[QuestionAgent] 预生成失败 kp=$kpId: $e');
+    }).whenComplete(() => _inFlight.remove(kpId));
     _inFlight[kpId] = future;
   }
 
@@ -223,9 +229,17 @@ $recentKpBlock
     int kpId,
     AiSettings settings,
   ) async {
-    // 生成（最多 2 次：首生成 + 判重后的 1 次重生成）
-    for (var attempt = 0; attempt < 2; attempt++) {
-      final parsed = await _generateOnce(userId, subjectId, kpId, settings);
+    // 生成（最多 3 次：首生成 + 判重后的 2 次重生成）
+    // 重试时注入更多历史，强制模型避开已重复的模板。
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final historyLimit = attempt == 0 ? 8 : 8 + attempt * 8; // 8 / 16 / 24
+      final parsed = await _generateOnce(
+        userId,
+        subjectId,
+        kpId,
+        settings,
+        historyLimit: historyLimit,
+      );
       if (parsed == null) break; // 生成失败，用已抛的错
 
       // C: 脚本判重 —— 只对重复的题花重生成的钱，校验本身免费
@@ -264,8 +278,9 @@ $recentKpBlock
     int userId,
     int subjectId,
     int kpId,
-    AiSettings settings,
-  ) async {
+    AiSettings settings, {
+    int historyLimit = 8,
+  }) async {
     final subject = await _subjectRepo.getSubjectById(subjectId);
     if (subject == null) throw StateError('科目 $subjectId 不存在');
     final kpName = await _kpRepo.getKpName(kpId) ?? '(未知知识点)';
@@ -274,8 +289,9 @@ $recentKpBlock
     final recent = await _portrait.recentLog(userId: userId, subjectId: subjectId);
     // 该知识点的实时做题统计 —— 校准难度的权威依据（画像可能过时）
     final kpStats = await _portrait.kpPracticeStats(userId, kpId);
-    // A: 该知识点最近已出过的题（防重复，注入摘要）
-    final recentQ = await _questionRepo.recentQuestionContents(kpId, limit: 8);
+    // A: 该知识点最近已出过的题（防重复，注入摘要；重试时注入更多）
+    final recentQ =
+        await _questionRepo.recentQuestionContents(kpId, limit: historyLimit);
     final recentQBlock = recentQ.isEmpty
         ? '（暂无）'
         : recentQ
@@ -362,20 +378,24 @@ D. [选项D]
     return parsed;
   }
 
-  /// C: Jaccard 相似度判重。纯脚本，零 token。
-  /// 用题干字符二元组集合算交集/并集，超阈值判重复。
-  /// 对比的是该知识点全部历史题干（不只近 8 题，校验不用省 token）。
+  /// C: 相似度判重。纯脚本，零 token。
+  ///
+  /// 只对**高度重复**（几乎逐字相同）判重，阈值 0.85。
+  /// 为什么不用低阈值：Jaccard 字符二元组对"换数字/换系数的同模板题"
+  /// 极其敏感（lim (x²-1)/(x-1) 换 2→3 集合几乎一样），低阈值会把
+  /// 考点相同但数值不同的正常题误判为重复 → 每道题都重生成 → 卡死。
+  /// 换数字的同模板题在刷题场景可接受，用户烦的是"同一道题原样出现"。
   Future<bool> _isDuplicate(int kpId, String content) async {
     final all = await _questionRepo.recentQuestionContents(kpId, limit: 100);
     if (all.isEmpty) return false;
     final target = _charset(content);
-    if (target.isEmpty) return false;
+    if (target.length < 8) return false; // 题干太短，没法可靠判重
     for (final c in all) {
       final set = _charset(c);
-      if (set.isEmpty) continue;
+      if (set.length < 8) continue;
       final inter = target.intersection(set).length;
       final union = target.union(set).length;
-      if (union > 0 && inter / union > 0.6) return true;
+      if (union > 0 && inter / union > 0.85) return true;
     }
     return false;
   }
