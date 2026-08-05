@@ -315,10 +315,10 @@ class _FullPageState extends State<_FullPage> {
     if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
   }
 
-  /// thumb 实际高度：按内容占比 + 最小 40px 保证可握。
+  /// thumb 实际高度：按内容占比 + 最小 72px（保证猫咪图足够可见）。
   double get _thumbHeight {
     final h = 12 + _trackHeight * _thumbExtent;
-    return h.clamp(40.0, _trackHeight).toDouble();
+    return h.clamp(72.0, _trackHeight).toDouble();
   }
 
   void _onDragStart(DragStartDetails d) {
@@ -397,30 +397,24 @@ class _FullPageState extends State<_FullPage> {
                     onVerticalDragEnd: _onDragEnd,
                     onVerticalDragCancel: _onDragCancel,
                     child: SizedBox(
-                      width: 22,
+                      width: 56,
                       child: Stack(
                         children: [
-                          // 轨道底色（拖动时淡入）
-                          AnimatedOpacity(
-                            opacity: _dragging ? 1 : 0,
-                            duration: const Duration(milliseconds: 120),
-                            child: Container(
-                              width: 22,
-                              color: Colors.black.withValues(alpha: 0.04),
-                            ),
-                          ),
-                          // thumb
+                          // thumb（猫咪图，PNG 自带透明）
                           Positioned(
                             top: thumbTop,
-                            left: 8,
-                            child: AnimatedContainer(
+                            right: 2,
+                            child: AnimatedOpacity(
+                              opacity: _dragging ? 1 : 0.9,
                               duration: const Duration(milliseconds: 120),
-                              width: _dragging ? 10 : 6,
-                              height: thumbHeight,
-                              decoration: BoxDecoration(
-                                color: Colors.black
-                                    .withValues(alpha: _dragging ? 0.55 : 0.3),
-                                borderRadius: BorderRadius.circular(5),
+                              child: SizedBox(
+                                width: 52,
+                                height: thumbHeight,
+                                child: Image.asset(
+                                  'assets/scrollbar/cat_thumb.png',
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.topCenter,
+                                ),
                               ),
                             ),
                           ),
