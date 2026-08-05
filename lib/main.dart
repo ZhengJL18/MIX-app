@@ -16,6 +16,7 @@ import 'screens/stats_screen.dart';
 import 'screens/ai_settings_screen.dart';
 import 'screens/wrong_questions_screen.dart';
 import 'services/native_agent_bridge.dart';
+import 'services/update_service.dart';
 import 'models/message_block.dart';
 import 'widgets/onboarding_flow.dart';
 
@@ -97,6 +98,72 @@ class _AppEntryState extends State<AppEntry> {
     _checkOnboarding();
     // 预初始化记忆/会话存储（无解压/无子进程，很轻）
     _agent.start();
+    // 自动更新检查（fire-and-forget，失败静默不打扰）
+    _checkUpdate();
+  }
+
+  /// 启动时静默检查更新，有新版且 onboarding 已完成 → 弹窗提示。
+  Future<void> _checkUpdate() async {
+    final info = await UpdateService.checkForUpdate();
+    if (!mounted || info == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final complete = prefs.getBool('onboarding_complete') ?? false;
+    if (!mounted || !complete) return; // onboarding 未完成不打扰
+    _showUpdateDialog(info);
+  }
+
+  void _showUpdateDialog(UpdateInfo info) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text('发现新版本 v${info.version}'),
+        content: SingleChildScrollView(
+          child: Text(info.notes?.trim().isNotEmpty == true
+              ? info.notes!
+              : '有新版本可用，点击更新。'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('稍后'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _downloadAndInstall(info);
+            },
+            child: const Text('立即更新'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadAndInstall(UpdateInfo info) async {
+    if (!mounted) return;
+    // 下载进度提示
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('正在下载更新...'),
+          ],
+        ),
+      ),
+    );
+    final ok = await UpdateService.downloadAndInstall(info.downloadUrl);
+    if (!mounted) return;
+    Navigator.of(context).pop(); // 关下载提示
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('下载失败，请稍后重试')),
+      );
+    }
   }
 
   Future<void> _checkOnboarding() async {

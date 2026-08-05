@@ -1,5 +1,5 @@
-# Build APK on every push to main / PR.
-# Artifact downloadable from GitHub Actions → Summary → Artifacts.
+# Build APK and publish GitHub Release on every push to master.
+# The tablet app checks the latest release on startup and self-updates.
 name: Build APK
 
 on:
@@ -31,11 +31,29 @@ jobs:
       - name: Run tests
         run: flutter test
 
-      - name: Build APK (debug)
-        run: flutter build apk --debug
+      # release 构建：用仓库内的 mix-release.jks 固定签名（debug/release 同签名，
+      # 覆盖安装不丢数据）。--build-number 用 github.run_number 单调递增 →
+      # versionCode 每次 push 必升，App 端据此检测到新版本。
+      - name: Build APK (release)
+        run: flutter build apk --release --build-number=${{ github.run_number }}
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mix-app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: mix-app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      # push 才发 release（PR 只构建验证不发布）。
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0+${{ github.run_number }}
+          name: MIX v1.0.0+${{ github.run_number }}
+          body: |
+            自动构建发布（commit ${{ github.sha }}）
+
+            ${{ github.event.head_commit.message }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: true
