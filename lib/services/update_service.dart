@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:app_installer_plus/app_installer_plus.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -47,12 +48,14 @@ class UpdateService {
             },
           )
           .timeout(_timeout);
+      debugPrint('[Update] HTTP ${resp.statusCode}');
 
       if (resp.statusCode != 200) return null;
       final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
 
       final tagName = data['tag_name'] as String? ?? '';
       final assets = data['assets'] as List<dynamic>? ?? [];
+      debugPrint('[Update] tag=$tagName assets=${assets.length}');
       if (tagName.isEmpty || assets.isEmpty) return null;
 
       // APK 下载直链（release 上传的 app-release.apk）
@@ -64,18 +67,24 @@ class UpdateService {
           break;
         }
       }
+      debugPrint('[Update] url=$downloadUrl');
       if (downloadUrl == null) return null;
 
       // 本地版本
       final local = await PackageInfo.fromPlatform();
       final localBuild = int.tryParse(local.buildNumber) ?? 0;
+      debugPrint('[Update] local build=$localBuild');
 
       // 远端 buildNumber 从 tag 末尾 +N 解析（如 v1.0.0+12 → 12）
       final plusIdx = tagName.lastIndexOf('+');
       final remoteBuild =
           plusIdx >= 0 ? int.tryParse(tagName.substring(plusIdx + 1)) ?? 0 : 0;
+      debugPrint('[Update] remote build=$remoteBuild');
 
-      if (remoteBuild <= localBuild) return null; // 无新版
+      if (remoteBuild <= localBuild) {
+        debugPrint('[Update] 无新版，跳过');
+        return null;
+      }
 
       return UpdateInfo(
         version: tagName.replaceFirst('v', ''),
@@ -83,7 +92,8 @@ class UpdateService {
         downloadUrl: downloadUrl,
         notes: data['body'] as String?,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Update] 检查失败: $e');
       return null; // 网络失败静默
     }
   }
