@@ -286,8 +286,8 @@ class _FullPageState extends State<_FullPage> {
 
   // 滚动条状态（比例 0~1）
   double _thumbOffset = 0; // thumb 顶部偏移占比（相对可滚动距离）
-  bool _dragging = false;
   double _trackHeight = 0;
+  bool _initialized = false; // 首次布局后同步过可见性
 
   // 拖动基准
   double _dragStartScroll = 0;
@@ -299,18 +299,15 @@ class _FullPageState extends State<_FullPage> {
     _ctrl.addListener(_sync);
   }
 
-  /// 滚动 → 更新 thumb 位置（拖动中跳过，避免循环）。
+  /// 滚动 → 更新 thumb 位置与可见性（内容超高才显示滚动条）。
   void _sync() {
-    if (!_ctrl.hasClients || _dragging) return;
+    if (!_ctrl.hasClients) return;
     setState(() {
       final pos = _ctrl.position;
       final range = pos.maxScrollExtent;
+      _scrollable = range > 0;
       _thumbOffset = range > 0 ? pos.pixels / range : 0;
     });
-  }
-
-  void _updateScrollable(bool canScroll) {
-    if (canScroll != _scrollable) setState(() => _scrollable = canScroll);
   }
 
   /// 猫咪贴图显示尺寸。原图 100×158，这里缩到 56×88（用户嫌 100 太大）。
@@ -319,10 +316,8 @@ class _FullPageState extends State<_FullPage> {
   static const double _thumbH = 88;
 
   void _onDragStart(DragStartDetails d) {
-    _dragging = true;
     _dragStartScroll = _ctrl.position.pixels;
     _dragStartY = d.globalPosition.dy;
-    setState(() {});
   }
 
   void _onDragUpdate(DragUpdateDetails d) {
@@ -336,15 +331,9 @@ class _FullPageState extends State<_FullPage> {
     setState(() => _thumbOffset = (_ctrl.position.pixels / range).clamp(0.0, 1.0));
   }
 
-  void _onDragEnd(DragEndDetails d) => _endDrag();
+  void _onDragEnd(DragEndDetails d) => _sync();
 
-  void _onDragCancel() => _endDrag();
-
-  void _endDrag() {
-    _dragging = false;
-    setState(() {});
-    _sync();
-  }
+  void _onDragCancel() => _sync();
 
   @override
   void dispose() {
@@ -360,25 +349,24 @@ class _FullPageState extends State<_FullPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           _trackHeight = constraints.maxHeight;
+          // 首次布局后同步一次滚动条可见性（controller listener 只在滚动时触发）
+          if (_ctrl.hasClients && !_initialized) {
+            _initialized = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+          }
           // 猫咪贴图固定大小，只随滚动上下移动，不随内容占比拉伸。
           final thumbTop = _thumbOffset.clamp(0.0, 1.0) *
               (_trackHeight - _thumbH);
 
           return Stack(
             children: [
-              // 内容（禁手势，只读滚动条）
+              // 内容（禁手势，只读滚动条；滚动条可见性由 _sync 监听 controller 判断）
               Positioned.fill(
-                child: NotificationListener<ScrollMetricsNotification>(
-                  onNotification: (n) {
-                    _updateScrollable(n.metrics.maxScrollExtent > 0);
-                    return false;
-                  },
-                  child: SingleChildScrollView(
-                    controller: _ctrl,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
-                    child: widget.child,
-                  ),
+                child: SingleChildScrollView(
+                  controller: _ctrl,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(24),
+                  child: widget.child,
                 ),
               ),
               // 可拖动滚动条（整条轨道是命中区）
