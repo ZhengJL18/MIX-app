@@ -29,7 +29,7 @@ class UpdateInfo {
 
 /// 自动更新服务。
 ///
-/// 版本源：GitHub Releases（CI 每次 push 发 release，tag = v1.0.0+<run_number>）。
+/// 版本源：GitHub Releases（CI 每次 push 发 release，tag = `v1.0.0+<run_number>`）。
 /// App 启动时 checkForUpdate()，有新版返回 UpdateInfo，无/失败返回 null（静默）。
 class UpdateService {
   static const String _repo = 'ZhengJL18/MIX-app';
