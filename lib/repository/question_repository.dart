@@ -50,20 +50,6 @@ class QuestionRepository {
     return rows.isEmpty ? null : (rows.first['subject_id'] as num).toInt();
   }
 
-  /// 取某知识点尚未被该用户做过的种子题（冷启动用），没有则返回 null。
-  Future<Map<String, dynamic>?> getUnusedSeedQuestion(int kpId, int userId) async {
-    final db = await DatabaseHelper.instance.database;
-    final rows = await db.rawQuery('''
-      SELECT q.* FROM questions q
-      WHERE q.kp_id = ? AND q.is_seed = 1
-      AND q.id NOT IN (
-        SELECT question_id FROM practice_records WHERE user_id = ?
-      )
-      LIMIT 1
-    ''', [kpId, userId]);
-    return rows.isEmpty ? null : rows.first;
-  }
-
   /// 该知识点历史错因分布，喂给 AI 出题提示词（3.4 build_prompt 用）。
   Future<Map<String, int>> getErrorDistribution(int kpId) async {
     final db = await DatabaseHelper.instance.database;

@@ -4,8 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/feedback_v2.dart';
-import '../engine/prompt_builder.dart';
-import '../engine/selection.dart';
 import '../data/preset_data.dart';
 import '../repository/kp_repository.dart';
 import '../repository/kp_state_repository.dart';
@@ -13,7 +11,7 @@ import '../repository/practice_repository.dart';
 import '../repository/question_repository.dart';
 import '../repository/subject_repository.dart';
 import '../services/ai_service.dart';
-import '../services/pregeneration_service.dart';
+import '../services/question_agent_service.dart';
 import '../services/student_portrait_service.dart';
 
 /// 单机版固定用户 id = 1。
@@ -33,11 +31,10 @@ class AppState extends ChangeNotifier {
   final KpStateRepository kpStateRepo = KpStateRepository();
   final QuestionRepository questionRepo = QuestionRepository();
   final PracticeRepository practiceRepo = PracticeRepository();
-  final SelectionEngine selectionEngine = SelectionEngine();
 
   AiService _aiService;
-  late PregenerationService _pregen;
   late StudentPortraitService _portrait;
+  late QuestionAgentService _questionAgent;
 
   int _questionIndex = 0;
   bool _loadingNext = false;
@@ -63,14 +60,11 @@ class AppState extends ChangeNotifier {
     _rebuildServices();
   }
 
-  /// 用当前 AI 服务重建依赖它的服务。同一实例贯穿出题画像与反馈画像，
-  /// 避免 pregen 内部默认构造一个绑 MockAiService 的 StudentPortraitService。
+  /// 用当前 AI 服务重建依赖它的服务。同一画像实例贯穿出题与反馈，
+  /// 避免 question agent 内部默认构造一个绑 MockAiService 的独立画像。
   void _rebuildServices() {
     _portrait = StudentPortraitService(aiService: _aiService);
-    _pregen = PregenerationService(
-      aiService: _aiService,
-      promptBuilder: PromptBuilder(portraitService: _portrait),
-    );
+    _questionAgent = QuestionAgentService(portraitService: _portrait);
   }
 
   /// 启动时从 SharedPreferences 读取用户配置的真实 AI 服务。
@@ -116,7 +110,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// 生成一道题（选科目/知识点 + 取/生成题目）。
+  /// 生成一道题（主/子代理选科选点 + 出题）。
   Future<Map<String, dynamic>?> _generateOne({
     void Function(String accumulated)? onStream,
   }) async {
@@ -125,11 +119,10 @@ class AppState extends ChangeNotifier {
       _lastError = '请先在"科目管理"中创建至少一个科目和知识点';
       return null;
     }
-    final subjectId = await selectionEngine.selectSubject(kLocalUserId);
-    final kpId =
-        await selectionEngine.selectKp(kLocalUserId, subjectId, _questionIndex);
-    final questionId =
-        await _pregen.nextQuestionId(kLocalUserId, kpId, subjectId, onStream: onStream);
+    final questionId = await _questionAgent.nextQuestionId(
+      kLocalUserId,
+      onStream: onStream,
+    );
     final question = await questionRepo.getById(questionId);
 
     _questionIndex += 1;

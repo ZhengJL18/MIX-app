@@ -115,6 +115,39 @@ class StudentPortraitService {
     return buf.toString();
   }
 
+  /// 某科目画像的"摘要"（节俭版：只读首节能力概况 + 近10题对错），
+  /// 供主代理在选科时并行对比各科，不必读每科全文。
+  Future<String> profileSummary({
+    required int userId,
+    required int subjectId,
+  }) async {
+    final subject = await _subjectRepo.getSubjectById(subjectId);
+    final name = subject?['name'] as String? ?? '(未知科目)';
+
+    // 首节能力概况（画像存在才读，避免 mock/未生成时读空）
+    String overview = '';
+    final file = await _profileFile(subjectId);
+    if (await file.exists()) {
+      final content = await file.readAsString();
+      final m = RegExp(r'##\s*一、能力概况[^\n]*\n(.*?)(?=\n##\s|\Z)',
+              dotAll: true)
+          .firstMatch(content);
+      overview = m?.group(1)?.trim().replaceAll('\n', '；') ?? '';
+    }
+
+    // 近10题对错（从近况日志里取计数行）
+    final recent = await recentLog(userId: userId, subjectId: subjectId);
+    final countLine = recent
+        .split('\n')
+        .where((l) => l.contains('近10题'))
+        .join('；');
+
+    final parts = <String>['$name'];
+    if (overview.isNotEmpty) parts.add(overview);
+    if (countLine.isNotEmpty) parts.add(countLine);
+    return parts.join(' | ');
+  }
+
   /// 作答后更新：做错 → 读旧画像 + 本题详情 + 近况 → LLM 全量重写 0号文件。
   /// 做对 → 什么都不做（近况由 SQL 派生自动反映，不花 token）。
   Future<void> onAnswered({

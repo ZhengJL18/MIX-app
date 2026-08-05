@@ -40,23 +40,6 @@ class EngineConstants {
   /// 连续正确加速：streak >= streakCap 时封顶
   static const int streakCorrectCap = 4;
   static const double streakBonusPerStep = 0.15;
-
-  /// 维护区 / 安全区穿插节奏
-  static const int maintenanceInterval = 5;
-  static const int safeInterval = 15;
-
-  /// next_pool 预生成深度
-  static const int pregenDepth = 1;
-}
-
-/// 四区名称，保持与设计文档中文一致，UI 与算法共用同一套常量避免打字错误
-class Zones {
-  static const String breakthrough = '攻坚';
-  static const String review = '复习';
-  static const String maintenance = '维护';
-  static const String safe = '安全';
-
-  static const List<String> all = [breakthrough, review, maintenance, safe];
 }
 
 /// 错因维度
