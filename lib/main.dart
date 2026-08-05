@@ -177,7 +177,7 @@ class _AppEntryState extends State<AppEntry> {
   Widget build(BuildContext context) {
     if (_onboardingComplete == null) {
       return Scaffold(
-        backgroundColor: AppTheme.light.scaffoldBackgroundColor,
+        backgroundColor: context.appPalette.bg,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -228,7 +228,7 @@ class _MainShellState extends State<_MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.light.scaffoldBackgroundColor,
+      backgroundColor: context.appPalette.bg,
       body: Stack(
         children: [
           SafeArea(
@@ -257,7 +257,7 @@ class _MainShellState extends State<_MainShell> {
     final isActive = (int page) => _currentPage == page;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppTheme.light.cardTheme.color,
+      color: context.appPalette.surface,
       child: Row(
         children: [
           // 左上角 Logo = 二级菜单入口
