@@ -127,7 +127,7 @@ class NativeAgentBridge {
     final agent = JailerAgent(
       llm: OpenAiLlmClient(
         config: LlmConfig(
-          baseUrl: settings.baseUrl,
+          baseUrl: settings.chatBaseUrl,
           apiKey: settings.apiKey,
           model: settings.model,
         ),

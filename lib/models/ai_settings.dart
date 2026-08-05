@@ -43,6 +43,13 @@ class AiSettings {
   bool get isComplete =>
       vendorId.isNotEmpty && model.isNotEmpty && apiKey.isNotEmpty && baseUrl.isNotEmpty;
 
+  /// OpenAI 兼容的完整 chat.completions 端点。
+  /// 预设厂商 baseUrl 是根地址（如 https://api.deepseek.com/v1），
+  /// Hermes LLM 客户端要求完整端点，缺 /chat/completions 时补上。
+  String get chatBaseUrl => baseUrl.endsWith('/chat/completions')
+      ? baseUrl
+      : '$baseUrl/chat/completions';
+
   /// 对应的 Hermes provider 信息；未知 vendor 返回 null。
   HermesProvider? get hermesProvider => kHermesProviderMap[vendorId];
 

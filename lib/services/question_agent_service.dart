@@ -105,7 +105,7 @@ $summaryBlock
     final planner = JailerAgent(
       llm: OpenAiLlmClient(
         config: LlmConfig(
-          baseUrl: settings.baseUrl,
+          baseUrl: settings.chatBaseUrl,
           apiKey: settings.apiKey,
           model: settings.model,
         ),
@@ -189,7 +189,7 @@ D. [选项D]
     final generator = JailerAgent(
       llm: OpenAiLlmClient(
         config: LlmConfig(
-          baseUrl: settings.baseUrl,
+          baseUrl: settings.chatBaseUrl,
           apiKey: settings.apiKey,
           model: settings.model,
         ),
@@ -200,6 +200,9 @@ D. [选项D]
     );
 
     final result = await generator.runConversation(prompt);
+    if (!result.completed || result.error != null) {
+      throw Exception(result.finalResponse ?? '出题代理失败');
+    }
     final text = result.finalResponse ?? '';
     if (text.trim().isEmpty) {
       throw Exception('出题代理返回为空');
