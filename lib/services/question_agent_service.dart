@@ -126,8 +126,14 @@ class QuestionAgentService {
       return pooled;
     }
 
-    // 3. 现场生成 + 后台预生成下一题
-    final id = await _generateAndStore(userId, subjectId, kpId, settings);
+    // 3. 现场生成（带流式回调）+ 后台预生成下一题
+    final id = await _generateAndStore(
+      userId,
+      subjectId,
+      kpId,
+      settings,
+      onStream: onStream,
+    );
     _triggerPregenerate(userId, subjectId, kpId, settings);
     return id;
   }
@@ -156,8 +162,9 @@ class QuestionAgentService {
     int userId,
     int subjectId,
     int kpId,
-    AiSettings settings,
-  ) async {
+    AiSettings settings, {
+    void Function(String accumulated)? onStream,
+  }) async {
     final subject = await _subjectRepo.getSubjectById(subjectId);
     if (subject == null) throw StateError('科目 $subjectId 不存在');
     final kpName = await _kpRepo.getKpName(kpId) ?? '(未知知识点)';
@@ -234,6 +241,8 @@ D. [选项D]
       systemPrompt: '你是出题代理，严格按要求的 Markdown 格式出题。',
       toolDefinitionsProvider: () => const [],
       maxIterations: 3,
+      // 真流式：LLM 逐字生成实时回传 UI，用户看到打字机效果而非干等加载圈
+      onDelta: onStream,
     );
 
     final result = await generator.runConversation(prompt);
