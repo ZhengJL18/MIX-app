@@ -1,4 +1,5 @@
 import '../config/config.dart';
+import 'mastery.dart';
 
 /// 新固定数值三段扣分逻辑（替代旧 feedback.dart 的百分比扣分）
 ///
@@ -18,7 +19,7 @@ Map<String, dynamic> applyFeedbackV2({
 
   if (correct) {
     // 答对：复用旧逻辑的加分
-    final raw = _compositeMastery(newState, subject);
+    final raw = compositeMastery(newState, subject);
     final streak = (newState['streak_correct'] as num).toInt();
     final bonus = 1.0 +
         EngineConstants.streakBonusPerStep *
@@ -69,30 +70,6 @@ Map<String, dynamic> applyFeedbackV2({
   newState['review_count'] = (newState['review_count'] as num).toInt() + 1;
   newState['last_review_at'] = DateTime.now().toUtc().toIso8601String();
   return newState;
-}
-
-double _compositeMastery(Map<String, dynamic> state, Map<String, dynamic> weights) {
-  final complexity =
-      ((state['complexity'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0);
-  final understand =
-      ((state['understand'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0);
-  final redundancy =
-      ((state['redundancy'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0);
-  final coverage =
-      ((state['coverage'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0);
-
-  double raw =
-      ((weights['w_complexity'] as num?)?.toDouble() ?? 0.4) * complexity +
-          ((weights['w_understand'] as num?)?.toDouble() ?? 0.3) * understand +
-          ((weights['w_redundancy'] as num?)?.toDouble() ?? 0.1) * redundancy +
-          ((weights['w_coverage'] as num?)?.toDouble() ?? 0.2) * coverage;
-
-  final worst = [complexity, understand, redundancy, coverage]
-      .reduce((a, b) => a < b ? a : b);
-  if (worst < EngineConstants.weaknessThreshold) {
-    raw *= (0.5 + worst);
-  }
-  return raw;
 }
 
 /// 匹配错因中文 label → 维度 key

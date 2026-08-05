@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/feedback_v2.dart';
+import '../engine/prompt_builder.dart';
 import '../engine/selection.dart';
 import '../data/preset_data.dart';
 import '../repository/kp_repository.dart';
@@ -11,6 +14,7 @@ import '../repository/question_repository.dart';
 import '../repository/subject_repository.dart';
 import '../services/ai_service.dart';
 import '../services/pregeneration_service.dart';
+import '../services/student_portrait_service.dart';
 
 /// 单机版固定用户 id = 1。
 /// TODO: 多用户时改为从本地 SharedPreferences/uuid 生成，或对接账号系统。
@@ -19,7 +23,7 @@ const int kLocalUserId = 1;
 class AppState extends ChangeNotifier {
   AppState({AiService? aiService})
       : _aiService = aiService ?? MockAiService() {
-    _pregen = PregenerationService(aiService: _aiService);
+    _rebuildServices();
     // 启动时加载用户保存的 AI 配置，避免重启后静默降级成示例题
     _loadSavedAiConfig();
   }
@@ -33,11 +37,9 @@ class AppState extends ChangeNotifier {
 
   AiService _aiService;
   late PregenerationService _pregen;
+  late StudentPortraitService _portrait;
 
   int _questionIndex = 0;
-  int? _currentSubjectId;
-  int? _currentKpId;
-  Map<String, dynamic>? _currentQuestion;
   bool _loadingNext = false;
   String? _lastError;
 
@@ -51,23 +53,24 @@ class AppState extends ChangeNotifier {
   /// 当前游标（当前展示的题在队列中的位置）。
   int get cursor => _cursor;
 
-  /// 当前题目 = 队列游标处的题（兼容旧引用）。
-  @override
-  Map<String, dynamic>? get currentQuestion =>
-      _questions.isNotEmpty && _cursor < _questions.length
-          ? _questions[_cursor]
-          : null;
-
   int get questionIndex => _questionIndex;
-  int? get currentSubjectId => _currentSubjectId;
-  int? get currentKpId => _currentKpId;
   bool get loadingNext => _loadingNext;
   String? get lastError => _lastError;
 
   /// 允许运行期切换 AI 服务实现（例如用户在设置里填入了真实 API Key）。
   void configureAiService(AiService service) {
     _aiService = service;
-    _pregen = PregenerationService(aiService: _aiService);
+    _rebuildServices();
+  }
+
+  /// 用当前 AI 服务重建依赖它的服务。同一实例贯穿出题画像与反馈画像，
+  /// 避免 pregen 内部默认构造一个绑 MockAiService 的 StudentPortraitService。
+  void _rebuildServices() {
+    _portrait = StudentPortraitService(aiService: _aiService);
+    _pregen = PregenerationService(
+      aiService: _aiService,
+      promptBuilder: PromptBuilder(portraitService: _portrait),
+    );
   }
 
   /// 启动时从 SharedPreferences 读取用户配置的真实 AI 服务。
@@ -129,8 +132,6 @@ class AppState extends ChangeNotifier {
         await _pregen.nextQuestionId(kLocalUserId, kpId, subjectId, onStream: onStream);
     final question = await questionRepo.getById(questionId);
 
-    _currentSubjectId = subjectId;
-    _currentKpId = kpId;
     _questionIndex += 1;
     return question;
   }
@@ -170,29 +171,34 @@ class AppState extends ChangeNotifier {
     return '出题失败：$s';
   }
 
-  /// 提交作答结果：写 practice_records + 按 3.4 公式更新 kp_user_state。
+  /// 提交作答结果：写 practice_records + 更新 kp_user_state + 触发画像更新。
   ///
-  /// [question] 必传：多题队列下可能不是当前题。
+  /// [question] 必传：多题队列下可能不是当前显示的那题。
+  /// kp/subject 一律从本题行推导，不依赖 _currentKpId/_currentSubjectId，
+  /// 避免游标移动后把作答记到别的知识点上。
   Future<void> submitAnswer({
     required bool correct,
     required Map<String, dynamic> question,
     String? mainCause,
     String? minorCause,
   }) async {
-    final kpId = _currentKpId;
-    final subjectId = _currentSubjectId;
-    if (kpId == null || subjectId == null || question == null) return;
+    final questionId = question['id'] as int?;
+    final kpId = question['kp_id'] as int?;
+    if (questionId == null || kpId == null) return;
 
     await practiceRepo.insertRecord(
       userId: kLocalUserId,
-      questionId: question['id'] as int,
+      questionId: questionId,
       correct: correct,
       mainCause: mainCause,
       minorCause: minorCause,
     );
 
+    final subjectId = await questionRepo.getSubjectIdOfQuestion(questionId);
+    if (subjectId == null) return;
     final subject = await subjectRepo.getSubjectById(subjectId);
     if (subject == null) return;
+
     final state = await kpStateRepo.getOrCreateState(
       userId: kLocalUserId,
       kpId: kpId,
@@ -216,6 +222,20 @@ class AppState extends ChangeNotifier {
       'review_count': updated['review_count'],
       'last_review_at': updated['last_review_at'],
     });
+
+    // 做错才触发 LLM 重写学科画像；做对只走程序计数（近况由 SQL 派生）。
+    // 不 await：画像重写是文件级 best-effort，不应阻塞作答提交。
+    if (!correct) {
+      unawaited(_portrait.onAnswered(
+        userId: kLocalUserId,
+        subjectId: subjectId,
+        correct: correct,
+        question: question,
+        mainCause: mainCause,
+        minorCause: minorCause,
+      ));
+    }
+
     notifyListeners();
   }
 }
