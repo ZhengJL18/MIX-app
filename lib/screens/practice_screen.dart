@@ -73,6 +73,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   void _onStream(String accumulated) {
+    debugPrint('[Practice] onStream len=${accumulated.length}');
     if (!mounted) return;
     setState(() => _streamingText = accumulated);
   }

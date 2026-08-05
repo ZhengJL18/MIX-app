@@ -165,6 +165,8 @@ class QuestionAgentService {
     AiSettings settings, {
     void Function(String accumulated)? onStream,
   }) async {
+    // 流式累积缓冲（onDelta 增量 → 累积后回传 UI）
+    final streamBuf = StringBuffer();
     final subject = await _subjectRepo.getSubjectById(subjectId);
     if (subject == null) throw StateError('科目 $subjectId 不存在');
     final kpName = await _kpRepo.getKpName(kpId) ?? '(未知知识点)';
@@ -241,8 +243,14 @@ D. [选项D]
       systemPrompt: '你是出题代理，严格按要求的 Markdown 格式出题。',
       toolDefinitionsProvider: () => const [],
       maxIterations: 3,
-      // 真流式：LLM 逐字生成实时回传 UI，用户看到打字机效果而非干等加载圈
-      onDelta: onStream,
+      // 真流式：LLM 逐字生成实时回传 UI。
+      // onDelta 是增量，onStream 语义是累积 → 用 buffer 累积后回传。
+      onDelta: (delta) {
+        if (onStream == null) return;
+        streamBuf.write(delta);
+        debugPrint('[Generator] stream len=${streamBuf.length}');
+        onStream(streamBuf.toString());
+      },
     );
 
     final result = await generator.runConversation(prompt);
